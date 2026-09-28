@@ -4,6 +4,7 @@ import { useErrors } from '../../store/errors';
 import { useLive } from '../../store/live';
 import { NA, useUnits } from '../../utils/format';
 import { C, F, R, S } from '../theme';
+import { useCanShow } from '../hooks';
 import { Gauge } from './Gauge';
 
 /**
@@ -20,11 +21,13 @@ export function TemperatureCards() {
   const u = useUnits();
   const active = records.filter((r) => r.active && r.scooterId === scooterId && r.kind === 'error');
   const hot = { motor: false, controller: active.some((r) => r.code === 40), battery: active.some((r) => r.code === 39 || r.code === 41) };
+  const can = useCanShow();
   const cards = [
-    { key: 'motor', label: 'MOTOR', v: motor, hot: hot.motor },
-    { key: 'controller', label: 'CONTROLLER', v: ctrl, hot: hot.controller },
-    { key: 'battery', label: 'BATTERY', v: batt, hot: hot.battery },
-  ];
+    { key: 'motor', label: 'MOTOR', v: motor, hot: hot.motor, show: can('motorTempC') },
+    { key: 'controller', label: 'CONTROLLER', v: ctrl, hot: hot.controller, show: can('controllerTempC') },
+    { key: 'battery', label: 'BATTERY', v: batt, hot: hot.battery, show: can('batteryTempC') },
+  ].filter((c) => c.show);
+  if (!cards.length) return null;
   return (
     <View style={styles.row}>
       {cards.map((c) => (

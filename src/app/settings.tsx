@@ -107,6 +107,7 @@ export default function SettingsScreen() {
         <Toggle k="dynamicAccent" title="Dynamic accent" sub="Accent follows charging, warning and critical states the scooter reports" />
         <Toggle k="reduceMotion" title="Reduce motion" sub="Turn off number and card animations" />
         <Toggle k="oledMode" title="OLED / low-power mode" sub="Black background, no photo or effects, bigger numbers, slower graph refresh" />
+        <Toggle k="showAllFields" title="Show all fields" sub="Also show values your scooter can never send (they stay Not available). Off: they are hidden." />
         <Toggle k="show3d" title="3D scooter" sub="Show the interactive 3D scooter on the dashboard and profile" />
         <Toggle k="easterEggs" title="Easter eggs" sub="Small hidden animations. They never change any data." />
       </GlassCard>

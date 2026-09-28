@@ -45,6 +45,7 @@ export interface Settings {
   tapSounds: boolean; // button sounds, off by default even when sounds are on
   oledMode: boolean; // black background, minimal effects, larger numbers
   cockpitKeepAwake: boolean; // keep screen on only while Cockpit Mode is open
+  showAllFields: boolean; // also show fields the connected scooter can never report
   show3d: boolean; // 3D scooter card on dashboard/profile
   easterEggs: boolean;
   firstConnectCelebrated: boolean;
@@ -90,6 +91,7 @@ const defaults: Settings = {
   tapSounds: false,
   oledMode: false,
   cockpitKeepAwake: false,
+  showAllFields: false,
   show3d: true,
   easterEggs: true,
   firstConnectCelebrated: false,

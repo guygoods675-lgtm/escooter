@@ -12,9 +12,9 @@ import { useSettings } from '../store/settings';
 import { notify } from './Notifier';
 import { useActiveRide, startRide } from './RideTracker';
 import { updateWidgets } from '../widgets/updateWidgets';
-import { clearHistory, recordSnapshot } from './telemetryHistory';
+import { clearHistory, recordGpsSpeed, recordSnapshot } from './telemetryHistory';
 import { feedback } from './Feedback';
-import { getLastFix } from './GPSManager';
+import { getLastFix, onGps } from './GPSManager';
 import { reading } from '../protocols/types';
 
 /**
@@ -110,7 +110,17 @@ export async function connectScooter(deviceId: string, advertisedName: string | 
     // No live speed from this scooter: keep phone GPS on while connected so the gauge can
     // show the phone's speed, labelled "Phone GPS".
     startPolling(); // stops any previous polling (and its GPS hold) first
-    if (!protocol.capabilities.telemetry.includes('speedKmh')) releaseConnGps = acquirePhoneGps();
+    if (!protocol.capabilities.telemetry.includes('speedKmh')) {
+      const release = acquirePhoneGps();
+      // Fill the Live tab's "GPS speed (phone)" graph; a recording ride already does this.
+      const off = onGps((f) => {
+        if (!useActiveRide.getState().active) recordGpsSpeed(f.t, f.speedKmh);
+      });
+      releaseConnGps = () => {
+        off();
+        release();
+      };
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     devLog('error', `Connect failed: ${msg}`);

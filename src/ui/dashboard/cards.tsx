@@ -16,7 +16,7 @@ import { EnergyFlow } from '../components/EnergyFlow';
 import { Gauge } from '../components/Gauge';
 import { Badge, GlassCard, Grid, NeonButton, SectionHeader, StatTile } from '../components/Glass';
 import { TemperatureCards } from '../components/TemperatureCards';
-import { useNow, useScooterTitle } from '../hooks';
+import { FieldKey, useCanShow, useScooterSpeed, useNow, useScooterTitle } from '../hooks';
 import { C, F, S } from '../theme';
 
 /**
@@ -120,18 +120,21 @@ function MiniGauges() {
   const ctrl = useLive((x) => x.snapshot?.controllerTempC?.value ?? null);
   const u = useUnits();
   const temp = motor ?? ctrl;
+  const can = useCanShow();
+  const showTemp = can('motorTempC') || can('controllerTempC');
+  if (!can('batteryPercent') && !showTemp) return null;
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: S.md }}>
-      <Gauge value={pct} max={100} size={150} label="Battery" unit="%" colors={[C.green, C.cyan]} />
-      <Gauge
+      {can('batteryPercent') && <Gauge value={pct} max={100} size={150} label="Battery" unit="%" colors={[C.green, C.cyan]} />}
+      {showTemp && <Gauge
         value={temp != null ? u.temp(temp) : null}
         min={u.tempUnit === 'f' ? 32 : 0}
         max={u.tempUnit === 'f' ? 176 : 80}
         size={150}
-        label={motor != null ? 'Motor' : 'Controller'}
+        label={motor != null || !can('controllerTempC') ? 'Motor' : 'Controller'}
         unit={u.tempLabel}
         colors={[C.amber, C.sunset]}
-      />
+      />}
     </View>
   );
 }
@@ -139,14 +142,16 @@ function MiniGauges() {
 function QuickStats() {
   const s = useLive((x) => x.snapshot);
   const u = useUnits();
+  const can = useCanShow();
+  if (!(['speedKmh', 'batteryPercent', 'powerW', 'batteryVoltage', 'rangeKm', 'rideMode'] as FieldKey[]).some(can)) return null;
   return (
     <Grid cols={3}>
-      <StatTile label="Speed" reading={s?.speedKmh} unit={u.speedLabel} convert={u.speed} icon="speedometer-outline" />
-      <StatTile label="Battery" reading={s?.batteryPercent} unit="%" digits={0} icon="battery-half-outline" color={C.green} />
-      <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} icon="flash-outline" color={C.amber} />
-      <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />
-      <StatTile label="Range est." reading={s?.rangeKm} unit={u.distLabel} convert={u.dist} />
-      <StatTile label="Ride mode" text={s?.rideMode?.value ?? null} />
+      {can('speedKmh') && <StatTile label="Speed" reading={s?.speedKmh} unit={u.speedLabel} convert={u.speed} icon="speedometer-outline" />}
+      {can('batteryPercent') && <StatTile label="Battery" reading={s?.batteryPercent} unit="%" digits={0} icon="battery-half-outline" color={C.green} />}
+      {can('powerW') && <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} icon="flash-outline" color={C.amber} />}
+      {can('batteryVoltage') && <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />}
+      {can('rangeKm') && <StatTile label="Range est." reading={s?.rangeKm} unit={u.distLabel} convert={u.dist} />}
+      {can('rideMode') && <StatTile label="Ride mode" text={s?.rideMode?.value ?? null} />}
     </Grid>
   );
 }
@@ -155,10 +160,12 @@ function BatteryCard() {
   const pct = useLive((x) => x.snapshot?.batteryPercent?.value ?? null);
   const charging = useLive((x) => x.battery?.charging?.value);
   const rideActive = useActiveRide((x) => x.active);
+  const can = useCanShow();
+  if (!can('batteryPercent') && !rideActive) return null;
   return (
     <Pressable onPress={() => router.push('/battery')}>
       <GlassCard>
-        <BatteryBar percent={pct} charging={charging} />
+        {can('batteryPercent') && <BatteryBar percent={pct} charging={charging} />}
         {rideActive && <Badge text="RIDE RECORDING" color={C.red} icon="radio-button-on" />}
       </GlassCard>
     </Pressable>
@@ -188,16 +195,18 @@ function AlertsCard() {
 function PowerCard() {
   const s = useLive((x) => x.snapshot);
   const u = useUnits();
+  const can = useCanShow();
+  if (!(['batteryVoltage', 'batteryCurrent', 'powerW', 'batteryTempC', 'controllerTempC', 'motorTempC'] as FieldKey[]).some(can)) return null;
   return (
     <>
       <SectionHeader title="Power" icon="flash-outline" />
       <Grid cols={3}>
-        <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />
-        <StatTile label="Current" reading={s?.batteryCurrent} unit="A" digits={2} />
-        <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} />
-        <StatTile label="Battery temp" reading={s?.batteryTempC} unit={u.tempLabel} convert={u.temp} digits={0} />
-        <StatTile label="Controller" reading={s?.controllerTempC} unit={u.tempLabel} convert={u.temp} />
-        <StatTile label="Motor temp" reading={s?.motorTempC} unit={u.tempLabel} convert={u.temp} />
+        {can('batteryVoltage') && <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />}
+        {can('batteryCurrent') && <StatTile label="Current" reading={s?.batteryCurrent} unit="A" digits={2} />}
+        {can('powerW') && <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} />}
+        {can('batteryTempC') && <StatTile label="Battery temp" reading={s?.batteryTempC} unit={u.tempLabel} convert={u.temp} digits={0} />}
+        {can('controllerTempC') && <StatTile label="Controller" reading={s?.controllerTempC} unit={u.tempLabel} convert={u.temp} />}
+        {can('motorTempC') && <StatTile label="Motor temp" reading={s?.motorTempC} unit={u.tempLabel} convert={u.temp} />}
       </Grid>
     </>
   );
@@ -207,16 +216,19 @@ function DistanceCard() {
   const s = useLive((x) => x.snapshot);
   const maxSpeed = useLive((x) => x.sessionMaxSpeed);
   const u = useUnits();
+  const can = useCanShow();
+  const scooterSpeed = useScooterSpeed();
+  if (!scooterSpeed && !(['rangeKm', 'odometerKm', 'tripDistanceKm', 'tripTimeSec', 'motorRpm'] as FieldKey[]).some(can)) return null;
   return (
     <>
       <SectionHeader title="Distance" icon="map-outline" />
       <Grid cols={3}>
-        <StatTile label="Range est." reading={s?.rangeKm} unit={u.distLabel} convert={u.dist} />
-        <StatTile label="Odometer" reading={s?.odometerKm} unit={u.distLabel} convert={u.dist} />
-        <StatTile label="Trip" reading={s?.tripDistanceKm} unit={u.distLabel} convert={u.dist} digits={2} />
-        <StatTile label="Trip time" text={s?.tripTimeSec ? fmtDuration(s.tripTimeSec.value) : null} />
-        <StatTile label="Max speed" text={maxSpeed != null ? u.speed(maxSpeed).toFixed(1) : null} unit={u.speedLabel} />
-        <StatTile label="Motor RPM" reading={s?.motorRpm} digits={0} />
+        {can('rangeKm') && <StatTile label="Range est." reading={s?.rangeKm} unit={u.distLabel} convert={u.dist} />}
+        {can('odometerKm') && <StatTile label="Odometer" reading={s?.odometerKm} unit={u.distLabel} convert={u.dist} />}
+        {can('tripDistanceKm') && <StatTile label="Trip" reading={s?.tripDistanceKm} unit={u.distLabel} convert={u.dist} digits={2} />}
+        {can('tripTimeSec') && <StatTile label="Trip time" text={s?.tripTimeSec ? fmtDuration(s.tripTimeSec.value) : null} />}
+        {scooterSpeed && <StatTile label="Max speed" text={maxSpeed != null ? u.speed(maxSpeed).toFixed(1) : null} unit={u.speedLabel} />}
+        {can('motorRpm') && <StatTile label="Motor RPM" reading={s?.motorRpm} digits={0} />}
       </Grid>
     </>
   );
@@ -224,19 +236,21 @@ function DistanceCard() {
 
 function StatusCard() {
   const s = useLive((x) => x.snapshot);
+  const can = useCanShow();
+  if (!(['rideMode', 'headlight', 'tailLight', 'brake', 'accelerator', 'cruiseControl', 'errorCode', 'warningCode', 'regenLevel'] as FieldKey[]).some(can)) return null;
   return (
     <>
       <SectionHeader title="Status" icon="options-outline" right={<Text style={styles.link} onPress={() => router.push('/controls')}>Controls</Text>} />
       <Grid cols={3}>
-        <StatTile label="Ride mode" text={s?.rideMode?.value ?? null} />
-        <StatTile label="Headlight" text={s?.headlight ? onOff(s.headlight) : null} />
-        <StatTile label="Tail light" text={s?.tailLight ? onOff(s.tailLight) : null} />
-        <StatTile label="Brake" text={s?.brake ? onOff(s.brake) : null} />
-        <StatTile label="Accelerator" reading={s?.accelerator} unit="%" digits={0} />
-        <StatTile label="Cruise" text={s?.cruiseControl ? onOff(s.cruiseControl) : null} />
-        <StatTile label="Errors" text={s?.errorCode ? (s.errorCode.value === 0 ? 'None' : `E${s.errorCode.value}`) : null} color={C.amber} />
-        <StatTile label="Warnings" text={s?.warningCode ? (s.warningCode.value === 0 ? 'None' : `W${s.warningCode.value}`) : null} />
-        <StatTile label="Regen" text={s?.regenLevel?.value ?? null} />
+        {can('rideMode') && <StatTile label="Ride mode" text={s?.rideMode?.value ?? null} />}
+        {can('headlight') && <StatTile label="Headlight" text={s?.headlight ? onOff(s.headlight) : null} />}
+        {can('tailLight') && <StatTile label="Tail light" text={s?.tailLight ? onOff(s.tailLight) : null} />}
+        {can('brake') && <StatTile label="Brake" text={s?.brake ? onOff(s.brake) : null} />}
+        {can('accelerator') && <StatTile label="Accelerator" reading={s?.accelerator} unit="%" digits={0} />}
+        {can('cruiseControl') && <StatTile label="Cruise" text={s?.cruiseControl ? onOff(s.cruiseControl) : null} />}
+        {can('errorCode') && <StatTile label="Errors" text={s?.errorCode ? (s.errorCode.value === 0 ? 'None' : `E${s.errorCode.value}`) : null} color={C.amber} />}
+        {can('warningCode') && <StatTile label="Warnings" text={s?.warningCode ? (s.warningCode.value === 0 ? 'None' : `W${s.warningCode.value}`) : null} />}
+        {can('regenLevel') && <StatTile label="Regen" text={s?.regenLevel?.value ?? null} />}
       </Grid>
     </>
   );
@@ -294,16 +308,19 @@ function PerfCard() {
   const s = useLive((x) => x.snapshot);
   const u = useUnits();
   const accel = useAccel();
+  const can = useCanShow();
+  const scooterSpeed = useScooterSpeed();
+  if (!(['speedKmh', 'powerW', 'motorRpm', 'motorTempC', 'controllerTempC'] as FieldKey[]).some(can)) return null;
   return (
     <>
       <SectionHeader title="Performance" icon="rocket-outline" right={<Text style={styles.link} onPress={() => router.push('/performance')}>Details</Text>} />
       <Grid cols={3}>
-        <StatTile label="Speed" reading={s?.speedKmh} unit={u.speedLabel} convert={u.speed} />
-        <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} />
-        <StatTile label="Accel." text={accel != null ? accel.toFixed(1) : null} unit="m/s²" confidence="calculated" source="Calculated" />
-        <StatTile label="Motor RPM" reading={s?.motorRpm} digits={0} />
-        <StatTile label="Motor" reading={s?.motorTempC} unit={u.tempLabel} convert={u.temp} />
-        <StatTile label="Controller" reading={s?.controllerTempC} unit={u.tempLabel} convert={u.temp} />
+        {can('speedKmh') && <StatTile label="Speed" reading={s?.speedKmh} unit={u.speedLabel} convert={u.speed} />}
+        {can('powerW') && <StatTile label="Power" reading={s?.powerW} unit="W" digits={0} />}
+        {scooterSpeed && <StatTile label="Accel." text={accel != null ? accel.toFixed(1) : null} unit="m/s²" confidence="calculated" source="Calculated" />}
+        {can('motorRpm') && <StatTile label="Motor RPM" reading={s?.motorRpm} digits={0} />}
+        {can('motorTempC') && <StatTile label="Motor" reading={s?.motorTempC} unit={u.tempLabel} convert={u.temp} />}
+        {can('controllerTempC') && <StatTile label="Controller" reading={s?.controllerTempC} unit={u.tempLabel} convert={u.temp} />}
       </Grid>
     </>
   );
@@ -325,12 +342,14 @@ function BatteryDetailCard() {
     const r = summarizeRide(pts, pts[0].t, pts[pts.length - 1].t);
     return r.whPerKm ?? null;
   }, [pts]);
+  const can = useCanShow();
+  if (!(['batteryVoltage', 'batteryCurrent'] as FieldKey[]).some(can)) return null;
   return (
     <>
       <SectionHeader title="Battery detail" icon="battery-charging-outline" right={<Text style={styles.link} onPress={() => router.push('/voltage')}>Voltage sag</Text>} />
       <Grid cols={3}>
-        <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />
-        <StatTile label="Current" reading={s?.batteryCurrent} unit="A" digits={2} />
+        {can('batteryVoltage') && <StatTile label="Voltage" reading={s?.batteryVoltage} unit="V" />}
+        {can('batteryCurrent') && <StatTile label="Current" reading={s?.batteryCurrent} unit="A" digits={2} />}
         <StatTile label="Wh/km (ride)" text={whKm != null ? whKm.toFixed(1) : null} confidence="calculated" source="Calculated" />
       </Grid>
     </>
@@ -360,6 +379,12 @@ function CockpitLaunch() {
   return <NeonButton title="Open Cockpit mode" icon="expand-outline" onPress={() => router.push('/cockpit')} style={{ marginBottom: S.md }} />;
 }
 
+/** Hides a card when the connected scooter can never report any of its fields. */
+function IfAny({ keys, children }: { keys: FieldKey[]; children: React.ReactNode }) {
+  const can = useCanShow();
+  return keys.some(can) ? <>{children}</> : null;
+}
+
 export function DashCard({ id }: { id: CardId }) {
   switch (id) {
     case 'header':
@@ -377,7 +402,7 @@ export function DashCard({ id }: { id: CardId }) {
     case 'alerts':
       return <AlertsCard />;
     case 'energy':
-      return <EnergyFlow />;
+      return <IfAny keys={['powerW', 'batteryCurrent']}><EnergyFlow /></IfAny>;
     case 'temps':
       return <TemperatureCards />;
     case 'power':
@@ -393,7 +418,7 @@ export function DashCard({ id }: { id: CardId }) {
     case 'minimal':
       return <MinimalCard />;
     case 'range':
-      return <RangeCard />;
+      return <IfAny keys={['rangeKm', 'batteryPercent']}><RangeCard /></IfAny>;
     case 'scooter3d':
       return <Scooter3DCard />;
     case 'perf':

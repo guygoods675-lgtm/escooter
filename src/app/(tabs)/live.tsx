@@ -9,6 +9,7 @@ import { Screen } from '../../ui/components/Screen';
 import { C, F, S } from '../../ui/theme';
 import { NA, useUnits } from '../../utils/format';
 import { router } from 'expo-router';
+import { FieldKey, useCanShow, useScooterSpeed } from '../../ui/hooks';
 
 type Win = '30s' | '5m' | '30m' | 'ride';
 const WINDOWS: { label: string; value: Win }[] = [
@@ -28,18 +29,20 @@ export default function LiveScreen() {
   const now = Date.now();
   const from = win === 'ride' ? rideStart ?? undefined : now - MS[win];
 
-  const charts: { key: SeriesKey; title: string; unit: string; color: string; digits?: number; convert?: (v: number) => number }[] = [
-    { key: 'speed', title: 'Speed', unit: u.speedLabel, color: C.purple, convert: u.speed },
+  const can = useCanShow();
+  const scooterSpeed = useScooterSpeed();
+  const charts: { key: SeriesKey; field?: FieldKey | 'scooterSpeed'; title: string; unit: string; color: string; digits?: number; convert?: (v: number) => number }[] = [
+    { key: 'speed', field: 'scooterSpeed', title: 'Speed', unit: u.speedLabel, color: C.purple, convert: u.speed },
     { key: 'gpsSpeed', title: 'GPS speed (phone)', unit: u.speedLabel, color: C.cyan, convert: u.speed },
-    { key: 'battery', title: 'Battery', unit: '%', color: C.green, digits: 0 },
-    { key: 'voltage', title: 'Battery voltage', unit: 'V', color: C.cyan, digits: 2 },
-    { key: 'current', title: 'Battery current', unit: 'A', color: C.amber, digits: 2 },
-    { key: 'power', title: 'Power', unit: 'W', color: C.purpleLight, digits: 0 },
-    { key: 'motorTemp', title: 'Motor temperature', unit: u.tempLabel, color: C.sunset, convert: u.temp },
-    { key: 'controllerTemp', title: 'Controller temperature', unit: u.tempLabel, color: C.sunset, convert: u.temp },
-    { key: 'batteryTemp', title: 'Battery temperature', unit: u.tempLabel, color: C.amber, convert: u.temp },
-    { key: 'rpm', title: 'Motor RPM', unit: '', color: C.purple, digits: 0 },
-    { key: 'accel', title: 'Acceleration (from speed)', unit: ' m/s²', color: C.red, digits: 2 },
+    { key: 'battery', field: 'batteryPercent', title: 'Battery', unit: '%', color: C.green, digits: 0 },
+    { key: 'voltage', field: 'batteryVoltage', title: 'Battery voltage', unit: 'V', color: C.cyan, digits: 2 },
+    { key: 'current', field: 'batteryCurrent', title: 'Battery current', unit: 'A', color: C.amber, digits: 2 },
+    { key: 'power', field: 'powerW', title: 'Power', unit: 'W', color: C.purpleLight, digits: 0 },
+    { key: 'motorTemp', field: 'motorTempC', title: 'Motor temperature', unit: u.tempLabel, color: C.sunset, convert: u.temp },
+    { key: 'controllerTemp', field: 'controllerTempC', title: 'Controller temperature', unit: u.tempLabel, color: C.sunset, convert: u.temp },
+    { key: 'batteryTemp', field: 'batteryTempC', title: 'Battery temperature', unit: u.tempLabel, color: C.amber, convert: u.temp },
+    { key: 'rpm', field: 'motorRpm', title: 'Motor RPM', unit: '', color: C.purple, digits: 0 },
+    { key: 'accel', field: 'scooterSpeed', title: 'Acceleration (from speed)', unit: ' m/s²', color: C.red, digits: 2 },
   ];
 
   return (
@@ -48,11 +51,11 @@ export default function LiveScreen() {
       <Segmented options={WINDOWS} value={win} onChange={setWin} style={{ marginBottom: S.md }} />
       {win === 'ride' && !rideStart && <Note>No ride in progress. Showing everything recorded since connecting.</Note>}
       {conn !== 'connected' && (
-        <EmptyState icon="pulse" title="No scooter connected" body="Graphs fill with real samples once a scooter is connected. GPS speed appears while a ride is recording.">
+        <EmptyState icon="pulse" title="No scooter connected" body="Graphs fill with real samples once a scooter is connected. GPS speed from the phone appears while connected or recording a ride.">
           <NeonButton title="Connect Scooter" icon="bluetooth" onPress={() => router.push('/bluetooth')} />
         </EmptyState>
       )}
-      {charts.map((c) => {
+      {charts.filter((c) => !c.field || (c.field === 'scooterSpeed' ? scooterSpeed : can(c.field))).map((c) => {
         const data = getSeries(c.key, from);
         const last = data[data.length - 1];
         return (
