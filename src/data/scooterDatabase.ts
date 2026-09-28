@@ -1,0 +1,171 @@
+import { M365_ERROR_TABLE, ES2_ERROR_TABLE } from '../protocols/errorCodes';
+
+/**
+ * Local scooter model database. Add a model by appending an entry; add a
+ * protocol by implementing ScooterProtocol and registering it in
+ * protocols/registry.ts.
+ *
+ * Spec values are manufacturer headline figures for the base variant. A null
+ * field means we have not verified it; the UI shows "Not available". Regional
+ * variants differ (e.g. speed caps), so always check the model's label/manual.
+ */
+export type ProtocolId = 'xiaomi-m365' | 'ninebot-es' | 'generic-ble';
+
+export interface ScooterModel {
+  id: string;
+  manufacturer: string;
+  model: string;
+  year: number | null;
+  batteryVoltage: number | null; // nominal V
+  batteryCapacityWh: number | null;
+  batteryCapacityAh: number | null;
+  motor: string | null;
+  wheelSize: string | null;
+  weightKg: number | null;
+  topSpeedKmh: number | null;
+  protocol: ProtocolId;
+  protocolNotes: string;
+  knownServices: string[];
+  knownTelemetry: string[];
+  errorCodes: Record<number, [string, string, string[]]> | null;
+  /** Advertised BLE name pattern, only where a public capture shows it. */
+  bleNamePattern?: RegExp;
+}
+
+const UART_TELEMETRY = ['Speed', 'Battery %', 'Voltage', 'Current', 'Battery temps', 'Controller temp', 'Odometer', 'Trip', 'Range', 'Errors', 'Cell voltages'];
+const NUS = 'Nordic UART 6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
+const ENCRYPTION_NOTE = 'Unencrypted protocol only. Newer BLE firmware encrypts this link and will show as "no protocol reply".';
+
+export const SCOOTER_MODELS: ScooterModel[] = [
+  {
+    id: 'xiaomi-m365',
+    manufacturer: 'Xiaomi',
+    model: 'Mi Electric Scooter M365',
+    year: 2016,
+    batteryVoltage: 36,
+    batteryCapacityWh: 280,
+    batteryCapacityAh: 7.8,
+    motor: '250 W hub motor',
+    wheelSize: '8.5"',
+    weightKg: 12.5,
+    topSpeedKmh: 25,
+    protocol: 'xiaomi-m365',
+    protocolNotes: ENCRYPTION_NOTE,
+    knownServices: [NUS],
+    knownTelemetry: UART_TELEMETRY,
+    errorCodes: M365_ERROR_TABLE as never,
+    bleNamePattern: /^MIScooter/i, // CamiAlfa/M365-BLE-PROTOCOL: "name MIScooterXXXX"
+  },
+  {
+    id: 'xiaomi-m365-pro',
+    manufacturer: 'Xiaomi',
+    model: 'Mi Electric Scooter Pro (M365 Pro)',
+    year: 2019,
+    batteryVoltage: 36,
+    batteryCapacityWh: 474,
+    batteryCapacityAh: 12.8,
+    motor: '300 W hub motor',
+    wheelSize: '8.5"',
+    weightKg: 14.2,
+    topSpeedKmh: 25,
+    protocol: 'xiaomi-m365',
+    protocolNotes: `${ENCRYPTION_NOTE} ninebot-docs notes the Pro ESC hardware mirrors the M365.`,
+    knownServices: [NUS],
+    knownTelemetry: UART_TELEMETRY,
+    errorCodes: M365_ERROR_TABLE as never,
+    bleNamePattern: /^MIScooter/i,
+  },
+  {
+    id: 'ninebot-es2',
+    manufacturer: 'Segway-Ninebot',
+    model: 'Ninebot KickScooter ES2',
+    year: 2018,
+    batteryVoltage: 36,
+    batteryCapacityWh: 187,
+    batteryCapacityAh: 5.2,
+    motor: '300 W hub motor',
+    wheelSize: '8" front / 7.5" rear',
+    weightKg: 12.5,
+    topSpeedKmh: 25,
+    protocol: 'ninebot-es',
+    protocolNotes: `${ENCRYPTION_NOTE} Read-only in Scooter Hub.`,
+    knownServices: [NUS],
+    knownTelemetry: [...UART_TELEMETRY, 'Ride mode', 'Power (reported)'],
+    errorCodes: ES2_ERROR_TABLE as never,
+  },
+  {
+    id: 'ninebot-es-family',
+    manufacturer: 'Segway-Ninebot',
+    model: 'Ninebot KickScooter ES1 / ES4',
+    year: null,
+    batteryVoltage: 36,
+    batteryCapacityWh: null,
+    batteryCapacityAh: null,
+    motor: null,
+    wheelSize: null,
+    weightKg: null,
+    topSpeedKmh: null,
+    protocol: 'ninebot-es',
+    protocolNotes: `Same ESC family as the documented ES2. ${ENCRYPTION_NOTE}`,
+    knownServices: [NUS],
+    knownTelemetry: UART_TELEMETRY,
+    errorCodes: ES2_ERROR_TABLE as never,
+  },
+  {
+    id: 'ninebot-max-g30',
+    manufacturer: 'Segway-Ninebot',
+    model: 'Ninebot KickScooter MAX G30',
+    year: 2019,
+    batteryVoltage: 36,
+    batteryCapacityWh: 551,
+    batteryCapacityAh: 15.3,
+    motor: '350 W hub motor',
+    wheelSize: '10"',
+    weightKg: 18.7,
+    topSpeedKmh: 25,
+    protocol: 'generic-ble',
+    protocolNotes: 'No public register map for this model was verified. Standard BLE services and the Developer inspector only.',
+    knownServices: [],
+    knownTelemetry: [],
+    errorCodes: null,
+  },
+  {
+    id: 'segway-zt3-pro',
+    manufacturer: 'Segway',
+    model: 'ZT3 Pro',
+    year: 2023,
+    batteryVoltage: null,
+    batteryCapacityWh: null,
+    batteryCapacityAh: null,
+    motor: null,
+    wheelSize: null,
+    weightKg: null,
+    topSpeedKmh: null,
+    protocol: 'generic-ble',
+    protocolNotes: 'No public protocol documentation found. Use Developer Mode to inspect services; add an adapter once a documented protocol exists.',
+    knownServices: [],
+    knownTelemetry: [],
+    errorCodes: null,
+  },
+  {
+    id: 'generic',
+    manufacturer: 'Generic',
+    model: 'Generic BLE scooter',
+    year: null,
+    batteryVoltage: null,
+    batteryCapacityWh: null,
+    batteryCapacityAh: null,
+    motor: null,
+    wheelSize: null,
+    weightKg: null,
+    topSpeedKmh: null,
+    protocol: 'generic-ble',
+    protocolNotes: 'Reads Bluetooth SIG Device Information and Battery services when present.',
+    knownServices: ['Device Information 0x180A', 'Battery Service 0x180F'],
+    knownTelemetry: ['Battery % (if Battery Service present)'],
+    errorCodes: null,
+  },
+];
+
+export const modelById = (id: string | null | undefined) => SCOOTER_MODELS.find((m) => m.id === id) ?? null;
+export const modelFullName = (m: ScooterModel) => `${m.manufacturer} ${m.model}`;
