@@ -16,7 +16,7 @@ import { DashCard, cardsFor } from '../../ui/dashboard/cards';
 import { Screen } from '../../ui/components/Screen';
 import { SignalBars } from '../../ui/components/SignalBars';
 import { useScooterTitle } from '../../ui/hooks';
-import { C, S, glow } from '../../ui/theme';
+import { C, F, S, glow } from '../../ui/theme';
 import { fmtDateTime, rssiQuality } from '../../utils/format';
 
 const LOGO = require('../../../assets/logo.png');
@@ -64,7 +64,11 @@ function Disconnected() {
   const recent = [...scooters].filter((s) => s.bleId).sort((a, b) => (b.lastConnected ?? 0) - (a.lastConnected ?? 0)).slice(0, 4);
   const btOn = adapter === 'PoweredOn';
   const busy = conn === 'connecting' || conn === 'identifying' || conn === 'reconnecting' || conn === 'found';
-  const supported = SCOOTER_MODELS.filter((m) => m.protocol !== 'generic-ble');
+  // Only models whose data Scooter Hub can really read. Experimental ones (untested
+  // on hardware) are listed apart; recognised-but-unreadable ones only in the Database.
+  const readable = SCOOTER_MODELS.filter((m) => m.protocol !== 'generic-ble');
+  const supported = readable.filter((m) => !m.protocolNotes.startsWith('Experimental'));
+  const experimental = readable.filter((m) => m.protocolNotes.startsWith('Experimental'));
   return (
     <>
       <Header />
@@ -102,20 +106,27 @@ function Disconnected() {
         </>
       )}
 
-      <SectionHeader title="Supported protocols" icon="shield-checkmark-outline" right={<Text style={styles.link} onPress={() => router.push('/database')}>Database</Text>} />
+      <SectionHeader title="Supported scooters" icon="shield-checkmark-outline" right={<Text style={styles.link} onPress={() => router.push('/database')}>Database</Text>} />
       <GlassCard>
         {supported.map((m) => (
           <View key={m.id} style={styles.supRow}>
             <Ionicons name="checkmark-circle" size={16} color={C.green} />
-            <Text style={styles.supText}>{m.manufacturer} {m.model}{m.protocolNotes.startsWith('Experimental') ? ' (experimental)' : ''}</Text>
+            <Text style={styles.supText}>{m.manufacturer} {m.model}</Text>
           </View>
         ))}
-        <View style={styles.supRow}>
-          <Ionicons name="ellipse-outline" size={16} color={C.textDim} />
-          <Text style={styles.supText}>Any BLE device: standard Battery & Device Information services</Text>
-        </View>
+        {experimental.length > 0 && (
+          <>
+            <Text style={[F.label, { marginTop: S.md, marginBottom: 4 }]}>Experimental (not tested on a real scooter yet)</Text>
+            {experimental.map((m) => (
+              <View key={m.id} style={styles.supRow}>
+                <Ionicons name="flask-outline" size={16} color={C.amber} />
+                <Text style={styles.supText}>{m.manufacturer} {m.model}</Text>
+              </View>
+            ))}
+          </>
+        )}
         <Note>
-          Scooter Hub only reads data a scooter exposes through its Bluetooth protocol. Models with encrypted or undocumented protocols show "Not available" instead of guessed values.
+          Other scooters (for example NAVEE and newer Segway models) are recognised by name but their data cannot be read. See the Database for details.
         </Note>
       </GlassCard>
     </>

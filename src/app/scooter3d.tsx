@@ -9,7 +9,7 @@ import { Screen } from '../ui/components/Screen';
 import { useScooterTitle } from '../ui/hooks';
 import { C, S } from '../ui/theme';
 
-function LegendRow({ part, driven, detail, source }: { part: string; driven: boolean; detail: string; source?: 'Scooter BLE' | 'Scooter BMS' | 'Model database' }) {
+function LegendRow({ part, driven, detail, source }: { part: string; driven: boolean; detail: string; source?: 'Scooter BLE' | 'Scooter BMS' | 'Model database' | 'Phone GPS' }) {
   return (
     <View style={{ paddingVertical: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.md }}>
@@ -29,6 +29,7 @@ export default function Scooter3DScreen() {
 
   const connected = useLive((s) => s.conn === 'connected');
   const hasSpeed = useLive((s) => s.conn === 'connected' && s.snapshot?.speedKmh != null);
+  const phoneSpeed = useLive((s) => s.snapshot?.speedKmh?.source === 'phone');
   const hasHead = useLive((s) => s.conn === 'connected' && s.snapshot?.headlight != null);
   const hasBrake = useLive((s) => s.conn === 'connected' && s.snapshot?.brake != null);
   const hasTail = useLive((s) => s.conn === 'connected' && s.snapshot?.tailLight != null);
@@ -38,7 +39,7 @@ export default function Scooter3DScreen() {
   // fade-in could stay stuck at opacity 0 (Screen remounts its content), so nothing showed.
   const close = () => router.back();
 
-  const wheelText = wheelFromDatabase ? `${wheelInches}" wheel from the model database` : `No wheel size in the model database; a ${wheelInches}" wheel is assumed, so the spin rate is only visual`;
+  const wheelText = wheelFromDatabase ? `${wheelInches}" wheel from the official specs` : `No wheel size in the model database; a ${wheelInches}" wheel is assumed, so the spin rate is only visual`;
 
   return (
     <Screen contentStyle={{ paddingTop: 110 }}>
@@ -55,7 +56,7 @@ export default function Scooter3DScreen() {
         <SectionHeader title="Live sync" icon="pulse-outline" />
         <GlassCard>
           {!connected && <Note icon="bluetooth-outline">No scooter connected: the model is static and nothing is lit.</Note>}
-          <LegendRow part="Wheel rotation" driven={hasSpeed} source="Scooter BLE" detail={hasSpeed ? `Spins at the scooter-reported speed. ${wheelText}.` : 'Speed not available, so the wheels stay still.'} />
+          <LegendRow part="Wheel rotation" driven={hasSpeed} source={phoneSpeed ? 'Phone GPS' : 'Scooter BLE'} detail={hasSpeed ? `Spins at the ${phoneSpeed ? "phone's GPS" : 'scooter-reported'} speed. ${wheelText}.` : 'Speed not available, so the wheels stay still.'} />
           <Divider />
           <LegendRow part="Headlight" driven={hasHead} source="Scooter BLE" detail={hasHead ? 'Glows only while the scooter reports the headlight on.' : 'This scooter does not report headlight state, so it is never lit.'} />
           <Divider />
@@ -78,7 +79,7 @@ export default function Scooter3DScreen() {
           <Divider />
           <LegendRow part="Turn indicators" driven={false} detail="Not supported: none of the supported scooter protocols report turn-signal state, so they are never lit." />
           <Divider />
-          <LegendRow part="Shape" driven={false} detail={`Generic scooter. Proportions vary slightly by model family only; this is not an exact model of your ${title}.`} />
+          <LegendRow part="Shape" driven={false} detail={wheelFromDatabase ? `Model-based: wheel size and scale follow the official ${wheelInches}" spec of your ${title}. Frame, deck and colours are a standard design, not an exact copy.` : `Standard proportions: no official wheel size is on file for your ${title}. Not an exact copy.`} />
         </GlassCard>
         <Note>Animations here are a visualisation. Read exact values on the dashboard and live data screens.</Note>
       </View>

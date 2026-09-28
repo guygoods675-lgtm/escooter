@@ -35,7 +35,7 @@ export interface ScooterModel {
 const UART_TELEMETRY = ['Speed', 'Battery %', 'Voltage', 'Current', 'Battery temps', 'Controller temp', 'Odometer', 'Trip', 'Range', 'Errors', 'Cell voltages'];
 const NUS = 'Nordic UART 6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 const EXPERIMENTAL_XIAOMI =
-  'Experimental. Newer Xiaomi scooters use encrypted Bluetooth (Xiaomi securitychip, service FE95). Scooter Hub checks this when connecting, logs in with your own key from your Xiaomi account and reads the values listed in Xiaomi\'s official property list for your model. Only the 4 Pro (2nd Gen) has been confirmed on a real scooter. Read-only.';
+  'Experimental. Newer Xiaomi scooters use encrypted Bluetooth (Xiaomi securitychip, service FE95). Scooter Hub checks this when connecting, logs in with your own key from your Xiaomi account and reads the values listed in Xiaomi\'s official property list for your model. Only the 4 Pro (2nd Gen) has a published, documented property map. Read-only.';
 const ENCRYPTION_NOTE = 'Unencrypted protocol only. Newer BLE firmware encrypts this link and will show as "no protocol reply".';
 
 export const SCOOTER_MODELS: ScooterModel[] = [
@@ -83,14 +83,14 @@ export const SCOOTER_MODELS: ScooterModel[] = [
     model: 'Electric Scooter 4 Pro (2nd Gen)',
     year: null,
     batteryVoltage: null,
-    batteryCapacityWh: null,
-    batteryCapacityAh: null,
-    motor: null,
-    wheelSize: null,
+    batteryCapacityWh: 468,
+    batteryCapacityAh: 10,
+    motor: '400 W rated, 1000 W peak',
+    wheelSize: '10" tubeless',
     weightKg: null,
-    topSpeedKmh: null,
+    topSpeedKmh: 25,
     protocol: 'xiaomi-t2336',
-    protocolNotes: 'Encrypted Xiaomi Bluetooth (securitychip login + MIoT SPEC), model xiaomi.scooter.t2336. Needs your scooter key from your Xiaomi account and the scooter PIN. Read-only. No instantaneous speed is exposed by the scooter (average and top speed only). Source: github.com/mehesbalazs/xiaomi-scooter-4-pro-2 (MIT).',
+    protocolNotes: 'Specs: mi.com/global/product/xiaomi-electric-scooter-4-pro-2nd-gen/specs. Encrypted Xiaomi Bluetooth (securitychip login + MIoT SPEC), model xiaomi.scooter.t2336. Needs your scooter key from your Xiaomi account and the scooter PIN. Read-only. No instantaneous speed is exposed by the scooter (average and top speed only). Source: github.com/mehesbalazs/xiaomi-scooter-4-pro-2 (MIT).',
     knownServices: ['Xiaomi FE95 (securitychip)'],
     knownTelemetry: ['Battery %', 'Voltage', 'Current', 'Power', 'Range', 'Trip', 'Riding time', 'Average speed', 'Odometer', 'Battery temp', 'Controller temp', 'Fault code', 'Battery health', 'Charge cycles'],
     errorCodes: null,
@@ -444,4 +444,7 @@ export const SCOOTER_MODELS: ScooterModel[] = [
 ];
 
 export const modelById = (id: string | null | undefined) => SCOOTER_MODELS.find((m) => m.id === id) ?? null;
+/** Database entry whose brand and model match what the connected scooter reported (exact text only). */
+export const modelByName = (brand: string | null | undefined, model: string | null | undefined) =>
+  brand && model ? SCOOTER_MODELS.find((m) => m.manufacturer.toLowerCase() === brand.toLowerCase() && m.model.toLowerCase() === model.toLowerCase()) ?? null : null;
 export const modelFullName = (m: ScooterModel) => `${m.manufacturer} ${m.model}`;

@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
-import { modelById } from '../../data/scooterDatabase';
+import { modelById, modelByName } from '../../data/scooterDatabase';
 import { useLive } from '../../store/live';
 import { useSettings } from '../../store/settings';
 import { useThemeVersion } from '../../store/theme';
@@ -277,8 +277,9 @@ export function parseWheelInches(s: string | null | undefined): number | null {
 }
 
 export function useScooterShape() {
-  const { brand, model, profile } = useScooterTitle();
-  const dbModel = modelById(profile?.modelId ?? null);
+  const { brand, model, profile, manual } = useScooterTitle();
+  // Manual model choice, else the database entry matching the model the connected scooter reported.
+  const dbModel = manual ? modelById(profile?.modelId ?? null) : modelByName(brand, model);
   const wheelIn = parseWheelInches(dbModel?.wheelSize);
   return useMemo(() => {
     const inches = wheelIn ?? DEFAULT_WHEEL_IN;
@@ -295,10 +296,11 @@ export function useScooterShape() {
       shape,
       wheelInches: inches,
       wheelFromDatabase: wheelIn != null,
+      modelName: dbModel ? `${dbModel.manufacturer} ${dbModel.model}` : null,
       // real rolling circumference in metres, used for wheel spin rate
       circumferenceM: Math.PI * inches * 0.0254,
     };
-  }, [brand, model, wheelIn]);
+  }, [brand, model, wheelIn, dbModel]);
 }
 
 // ---------------------------------------------------------------- camera
@@ -508,7 +510,7 @@ export function Scooter3D({ height = 300, interactive = true, live = true, showR
   useThemeVersion();
   const reduceMotion = useSettings((s) => s.reduceMotion);
   const { title } = useScooterTitle();
-  const { shape, circumferenceM } = useScooterShape();
+  const { shape, circumferenceM, wheelInches, wheelFromDatabase } = useScooterShape();
   const mesh = useMemo(() => buildScooterMesh(shape), [shape]);
   const [width, setWidth] = useState(0);
   const [frame, setFrame] = useState<Frame | null>(null);
@@ -761,7 +763,12 @@ export function Scooter3D({ height = 300, interactive = true, live = true, showR
           </Pressable>
         )}
       </View>
-      <Text style={styles.label}>Generic electric scooter visualization — not an exact 3D model of your {title}</Text>
+      <Text style={styles.name}>{title}</Text>
+      <Text style={styles.label}>
+        {wheelFromDatabase
+          ? `Model-based look: ${wheelInches}" wheels from the official specs. Not an exact 3D copy of this scooter.`
+          : 'Model-based look with standard proportions (no official wheel size on file). Not an exact 3D copy of this scooter.'}
+      </Text>
     </View>
   );
 }
@@ -790,6 +797,7 @@ export function Scooter3DCard({ live = true }: { live?: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  name: { color: C.text, fontSize: 14, fontWeight: '800', marginTop: S.sm, textAlign: 'center' },
   label: { color: C.textFaint, fontSize: 11.5, lineHeight: 16, marginTop: S.sm, textAlign: 'center' },
   reset: { position: 'absolute', right: 6, top: 6, width: 32, height: 32, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, get borderColor() { return rgba(C.purple, 0.3); } },
   expand: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8 },
