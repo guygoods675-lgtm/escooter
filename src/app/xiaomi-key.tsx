@@ -2,8 +2,11 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 import { parseCloudKey } from '../protocols/xiaomiSecure/crypto';
-import { reconnectCurrent } from '../services/ScooterManager';
-import { XiaomiCloudLogin } from '../services/xiaomiCloud';
+import { getSession, reconnectCurrent } from '../services/ScooterManager';
+import { XiaomiCloudLogin, fetchOfficialSpec } from '../services/xiaomiCloud';
+import { PropMap, mapFromMiotSpec } from '../protocols/xiaomiSecure/spec';
+import { XIAOMI_SCOOTER_PIDS } from '../protocols/xiaomiSecure/XiaomiT2336Protocol';
+import { miBeaconProductId } from '../protocols/registry';
 import { useLive } from '../store/live';
 import { clearXiaomiCredentials, hasXiaomiCredentials, saveXiaomiCredentials } from '../store/xiaomiKey';
 import { GlassCard, NeonButton, Note, SectionHeader } from '../ui/components/Glass';
@@ -23,6 +26,8 @@ export default function XiaomiKeyScreen() {
   const [cloudMsg, setCloudMsg] = useState<string | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const cloud = useRef<XiaomiCloudLogin | null>(null);
+  // Model details from the Xiaomi account; a hand-pasted key is for the 4 Pro 2nd Gen.
+  const [found, setFound] = useState<{ model: string; name: string; encryptType: 0 | 1; map?: PropMap } | null>(null);
 
   useEffect(() => () => {
     if (cloud.current) cloud.current.cancelled = true;
@@ -39,12 +44,22 @@ export default function XiaomiKeyScreen() {
       setCloudMsg('Log in on the Xiaomi page, then come back here. Waiting…');
       await c.waitForLogin();
       const scooters = await c.findScooters(setCloudMsg);
-      const s = scooters.find((x) => x.model === 'xiaomi.scooter.t2336') ?? scooters[0];
+      const session = getSession();
+      const pid = session ? miBeaconProductId(session) : null;
+      const connectedModel = pid !== null ? XIAOMI_SCOOTER_PIDS[pid]?.model : undefined;
+      const s = scooters.find((x) => x.model === connectedModel) ?? scooters.find((x) => x.model === 'xiaomi.scooter.t2336') ?? scooters[0];
       if (!s) throw new Error('No scooter was found in your Xiaomi account.');
       setCloudMsg(`Found "${s.name}" (${s.model}). Getting its key…`);
       const k = await c.bluetoothKey(s);
-      setKey(k);
-      setCloudMsg(`Key received for "${s.name}". Now type the scooter PIN and press Save.`);
+      let map: PropMap | undefined;
+      if (s.model !== 'xiaomi.scooter.t2336') {
+        setCloudMsg(`Loading Xiaomi's official property list for ${s.model}…`);
+        map = mapFromMiotSpec((await fetchOfficialSpec(s.model)) as never);
+        if (!map.batteryLevel && !map.voltage) throw new Error(`Xiaomi's property list for ${s.model} has no battery values Scooter Hub can read`);
+      }
+      setFound({ model: s.model, name: s.name, encryptType: k.encryptType, map });
+      setKey(k.key);
+      setCloudMsg(k.encryptType === 1 ? `Key received for "${s.name}". Now type the scooter PIN and press Save.` : `Key received for "${s.name}". This scooter has no PIN set, so just press Save.`);
     } catch (e) {
       setCloudMsg(`${e instanceof Error ? e.message : String(e)}. You can still paste the key by hand below.`);
     } finally {
@@ -58,12 +73,12 @@ export default function XiaomiKeyScreen() {
   }, []);
 
   const keyOk = parseCloudKey(key) !== null;
-  const pinOk = pin.trim().length >= 4;
+  const pinOk = found?.encryptType === 0 || pin.trim().length >= 4;
 
   const save = async () => {
     setBusy(true);
     try {
-      await saveXiaomiCredentials({ cloudKeyHex: key, pin: pin.trim() });
+      await saveXiaomiCredentials({ cloudKeyHex: key, pin: pin.trim(), model: found?.model ?? 'xiaomi.scooter.t2336', name: found?.name, encryptType: found?.encryptType ?? 1, map: found?.map });
       setKey('');
       setPin('');
       setSaved(true);
@@ -85,9 +100,9 @@ export default function XiaomiKeyScreen() {
   return (
     <Screen contentStyle={{ paddingTop: 70 }}>
       <GlassCard>
-        <Text style={styles.h}>Xiaomi Electric Scooter 4 Pro (2nd Gen)</Text>
+        <Text style={styles.h}>Xiaomi scooters with encrypted Bluetooth</Text>
         <Note>
-          This scooter encrypts its Bluetooth. To read it, Scooter Hub logs in the same way the Xiaomi Home app does, using two things only you have: the scooter's Bluetooth key from your Xiaomi account, and the scooter PIN.
+          The Xiaomi 4 Pro (2nd Gen) is supported. Other new Xiaomi scooters (4, 5, 6 series) are experimental: Scooter Hub loads Xiaomi's official property list for your model during setup. These scooters encrypt their Bluetooth. To read it, Scooter Hub logs in the same way the Xiaomi Home app does, using two things only you have: the scooter's Bluetooth key from your Xiaomi account, and the scooter PIN.
         </Note>
         {saved !== null && <Text style={[styles.status, { color: saved ? C.green : C.amber }]}>{saved ? 'A scooter key is saved on this phone.' : 'No scooter key saved yet.'}</Text>}
       </GlassCard>
@@ -104,7 +119,10 @@ export default function XiaomiKeyScreen() {
       <GlassCard>
         <TextInput
           value={key}
-          onChangeText={setKey}
+          onChangeText={(t) => {
+            setKey(t);
+            setFound(null); // a hand-pasted key is treated as a 4 Pro 2nd Gen key
+          }}
           placeholder="64 characters, 0-9 and a-f"
           placeholderTextColor={C.textFaint}
           autoCapitalize="none"
@@ -134,7 +152,7 @@ export default function XiaomiKeyScreen() {
         <Note>Close the Xiaomi Home app before connecting. The scooter talks to only one phone at a time.</Note>
         <Note>Read-only: Scooter Hub only reads values. It never locks, unlocks or changes settings on this scooter.</Note>
         <Note>Keep the key and PIN private. Together they let someone nearby log in to your scooter. They are stored encrypted on this phone only and are never exported.</Note>
-        <Note>This scooter does not report its live speed over Bluetooth, only average and top speed. Live speed on the dashboard comes from your phone's GPS during a ride.</Note>
+        <Note>The 4 Pro (2nd Gen) does not report its live speed over Bluetooth, only average and top speed, so live speed on the dashboard comes from your phone's GPS during a ride and is labelled "Phone GPS". Other Xiaomi models show the scooter's own live speed when Xiaomi's property list has one.</Note>
         <Text style={styles.src} onPress={() => Linking.openURL(REF)}>Protocol source: github.com/mehesbalazs/xiaomi-scooter-4-pro-2 (MIT)</Text>
       </GlassCard>
     </Screen>

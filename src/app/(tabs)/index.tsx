@@ -107,7 +107,7 @@ function Disconnected() {
         {supported.map((m) => (
           <View key={m.id} style={styles.supRow}>
             <Ionicons name="checkmark-circle" size={16} color={C.green} />
-            <Text style={styles.supText}>{m.manufacturer} {m.model}</Text>
+            <Text style={styles.supText}>{m.manufacturer} {m.model}{m.protocolNotes.startsWith('Experimental') ? ' (experimental)' : ''}</Text>
           </View>
         ))}
         <View style={styles.supRow}>

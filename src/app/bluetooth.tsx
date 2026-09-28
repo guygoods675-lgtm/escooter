@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ScannedDevice, requestBlePermissions, startScan, stopScan } from '../ble/BluetoothManager';
 import { UUID, shortUuid, uuidName } from '../ble/uuids';
+import { SUPPORT_LABEL, identifyAdvert } from '../ble/identify';
 import { SCOOTER_MODELS } from '../data/scooterDatabase';
 import { connectScooter, disconnectScooter } from '../services/ScooterManager';
 import { useGarage } from '../store/garage';
@@ -19,7 +20,10 @@ import { C, F, S } from '../ui/theme';
 import { NA, fmtDateTime, fmtDuration, rssiQuality } from '../utils/format';
 
 /** A device counts as a supported scooter when it advertises the UART service or matches a known model name. */
-const isSupported = (d: ScannedDevice) => d.serviceUUIDs.includes(UUID.NUS_SERVICE) || (!!d.name && SCOOTER_MODELS.some((m) => m.bleNamePattern?.test(d.name!)));
+const isSupported = (d: ScannedDevice) => {
+  const id = identifyAdvert(d);
+  return (!!id && id.support !== 'not-supported') || (!!d.name && SCOOTER_MODELS.some((m) => m.bleNamePattern?.test(d.name!)));
+};
 
 /** Scan-phase states only apply while no connection is in progress or up. */
 const BUSY = new Set(['connecting', 'identifying', 'reconnecting', 'connected']);
@@ -52,7 +56,7 @@ export default function BluetoothScreen() {
     setScanConn('scanning');
     startScan(
       (d) => {
-        setDevices((prev) => ({ ...prev, [d.id]: { ...prev[d.id], ...d, name: d.name ?? prev[d.id]?.name ?? null } }));
+        setDevices((prev) => ({ ...prev, [d.id]: { ...prev[d.id], ...d, name: d.name ?? prev[d.id]?.name ?? null, miBeaconPid: d.miBeaconPid ?? prev[d.id]?.miBeaconPid ?? null } }));
         if (!foundRef.current && isSupported(d)) {
           foundRef.current = true;
           setScanConn('found');
@@ -83,8 +87,9 @@ export default function BluetoothScreen() {
   }, [adapter]);
 
   const list = Object.values(devices)
-    .filter((d) => showAll || d.name || d.serviceUUIDs.includes(UUID.NUS_SERVICE))
-    .sort((a, b) => (b.rssi ?? -999) - (a.rssi ?? -999));
+    .filter((d) => showAll || d.name || d.serviceUUIDs.includes(UUID.NUS_SERVICE) || identifyAdvert(d))
+    // recognised scooters first, then by signal
+    .sort((a, b) => (identifyAdvert(b) ? 1 : 0) - (identifyAdvert(a) ? 1 : 0) || (b.rssi ?? -999) - (a.rssi ?? -999));
 
   const connecting = conn === 'connecting' || conn === 'identifying' || conn === 'reconnecting';
 
@@ -123,14 +128,15 @@ export default function BluetoothScreen() {
           {list.map((d, i) => {
             const q = rssiQuality(d.rssi);
             const nus = d.serviceUUIDs.includes(UUID.NUS_SERVICE);
+            const ident = identifyAdvert(d);
             return (
               <View key={d.id}>
                 {i > 0 && <Divider />}
                 <ListRow
-                  icon={nus ? 'bicycle' : 'hardware-chip-outline'}
-                  color={nus ? C.purpleLight : C.textDim}
-                  title={d.name ?? 'Unnamed device'}
-                  subtitle={`${d.id}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}${nus ? ' · UART service' : ''}`}
+                  icon={ident || nus ? 'bicycle' : 'hardware-chip-outline'}
+                  color={ident ? (ident.support === 'not-supported' ? C.amber : C.green) : nus ? C.purpleLight : C.textDim}
+                  title={ident ? `${ident.brand} ${ident.model}` : d.name ?? 'Unnamed device'}
+                  subtitle={`${ident ? `${SUPPORT_LABEL[ident.support]} · ` : ''}${ident && d.name ? `${d.name} · ` : ''}${d.id}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}${nus && !ident ? ' · UART service' : ''}`}
                   right={<SignalBars bars={q.bars} />}
                   onPress={() => {
                     stopScan();

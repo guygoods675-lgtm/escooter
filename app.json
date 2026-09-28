@@ -3,7 +3,7 @@
     "name": "Scooter Hub",
     "slug": "scooter-hub",
     "scheme": "scooterhub",
-    "version": "3.1.0",
+    "version": "3.2.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -36,7 +36,7 @@
         "android.permission.WAKE_LOCK"
       ],
       "predictiveBackGestureEnabled": false,
-      "versionCode": 4,
+      "versionCode": 5,
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW"

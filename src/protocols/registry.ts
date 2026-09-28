@@ -1,4 +1,5 @@
 import { UUID } from '../ble/uuids';
+import { NAVEE_SERVICE } from '../ble/identify';
 import type { ProtocolId } from '../data/scooterDatabase';
 import { GenericBleProtocol } from './generic/GenericBleProtocol';
 import { NinebotProtocol } from './ninebot/NinebotProtocol';
@@ -6,9 +7,9 @@ import type { BleTransport, ScooterProtocol } from './types';
 import { M365Protocol } from './xiaomi/M365Protocol';
 import { getRandomBytes } from 'expo-crypto';
 import { loadXiaomiCredentials } from '../store/xiaomiKey';
-import { T2336_PRODUCT_ID, XIAOMI_SEC, XiaomiT2336Protocol } from './xiaomiSecure/XiaomiT2336Protocol';
+import { XIAOMI_SCOOTER_PIDS, XIAOMI_SEC, XiaomiT2336Protocol } from './xiaomiSecure/XiaomiT2336Protocol';
 
-const newT2336 = () => new XiaomiT2336Protocol(loadXiaomiCredentials, () => getRandomBytes(48));
+const newT2336 = (productId: number | null = null) => new XiaomiT2336Protocol(loadXiaomiCredentials, () => getRandomBytes(48), productId);
 
 /** MiBeacon product id: bytes 2-3 (LE) of the FE95 service data (docs/protocol.md, mehesbalazs/xiaomi-scooter-4-pro-2). */
 export function miBeaconProductId(t: BleTransport): number | null {
@@ -32,7 +33,7 @@ export const createProtocol = (id: ProtocolId): ScooterProtocol => {
 export const PROTOCOL_LABELS: Record<ProtocolId, string> = {
   'xiaomi-m365': 'Xiaomi M365 (55AA)',
   'ninebot-es': 'Ninebot ES (5AA5)',
-  'xiaomi-t2336': 'Xiaomi 4 Pro 2nd Gen (encrypted)',
+  'xiaomi-t2336': 'Xiaomi encrypted (securitychip)',
   'generic-ble': 'Generic BLE',
 };
 
@@ -45,26 +46,20 @@ export interface DetectionResult {
 
 /**
  * Xiaomi "securitychip" scooters (FE95 service with the login/SPEC characteristics).
- * Only the 4 Pro 2nd Gen (product id 0x403D) has a documented property map; other
- * product ids are recognised and told apart instead of showing blank values.
+ * The 4 Pro 2nd Gen (product id 0x403D) has a built-in documented property map; other
+ * Xiaomi models use the property list from Xiaomi's official MIoT spec, loaded once
+ * during key setup, and are marked experimental.
  */
 async function detectXiaomiSecure(transport: BleTransport, preferred?: ProtocolId | null, previous?: ProtocolId | null): Promise<DetectionResult | null> {
   if (!XiaomiT2336Protocol.matches(transport)) return null;
   const pid = miBeaconProductId(transport);
   const pidText = pid !== null ? `0x${pid.toString(16).toUpperCase().padStart(4, '0')}` : 'not seen';
-  if (pid !== null && pid !== T2336_PRODUCT_ID && preferred !== 'xiaomi-t2336') {
-    const g = new GenericBleProtocol();
-    await g.connect(transport);
-    return {
-      protocol: g,
-      note: `Recognised a Xiaomi scooter with encrypted Bluetooth (product id ${pidText}). Scooter Hub can read the Xiaomi 4 Pro 2nd Gen (0x403D) so far. No public property map for this model was verified yet, so values stay "Not available".`,
-    };
-  }
   transport.log('info', `Xiaomi securitychip service found, product id ${pidText}`);
-  const p = newT2336();
+  const p = newT2336(pid);
   await p.connect(transport);
-  const how = pid === T2336_PRODUCT_ID ? 'product id 0x403D' : preferred === 'xiaomi-t2336' ? 'your manual model choice' : previous === 'xiaomi-t2336' ? 'the last connection' : 'its Xiaomi encrypted Bluetooth service';
-  const base = `Xiaomi Electric Scooter 4 Pro (2nd Gen) recognised from ${how}.`;
+  const known = pid !== null ? XIAOMI_SCOOTER_PIDS[pid] : undefined;
+  const how = known ? `product id ${pidText}` : preferred === 'xiaomi-t2336' ? 'your manual model choice' : previous === 'xiaomi-t2336' ? 'the last connection' : 'its Xiaomi encrypted Bluetooth service';
+  const base = known || p.status === 'ok' ? `Xiaomi ${p.modelName} recognised from ${how}.` : `Xiaomi scooter with encrypted Bluetooth recognised (product id ${pidText}).`;
   if (p.status === 'ok') return { protocol: p, note: `${base} ${p.statusMessage}` };
   return { protocol: p, note: `${base} ${p.statusMessage}`, action: 'xiaomi-key' };
 }
@@ -106,7 +101,15 @@ export async function detectProtocol(transport: BleTransport, preferred?: Protoc
     await g.connect(transport);
     return {
       protocol: g,
-      note: 'Nordic UART service found but no documented protocol answered. The scooter probably uses newer encrypted Bluetooth firmware. Scooter Hub can only read encrypted models whose protocol is publicly documented (currently the Xiaomi 4 Pro 2nd Gen).',
+      note: 'Nordic UART service found but no documented protocol answered. The scooter probably uses newer encrypted Bluetooth firmware. Scooter Hub can only read encrypted models whose protocol is publicly documented (Xiaomi securitychip scooters such as the 4 Pro 2nd Gen).',
+    };
+  }
+  if (transport.hasService(NAVEE_SERVICE) || /^NAVEE/i.test(advertisedName ?? '')) {
+    const g = new GenericBleProtocol();
+    await g.connect(transport);
+    return {
+      protocol: g,
+      note: 'NAVEE scooter recognised. Not supported yet: NAVEE scooters only share data after a login that uses secret keys hidden inside the NAVEE app. Those keys were only published by people who took the app apart, not by NAVEE, so Scooter Hub does not use them.',
     };
   }
   const g = new GenericBleProtocol();

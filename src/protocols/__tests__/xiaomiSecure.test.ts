@@ -67,7 +67,7 @@ test('GET frame layout and reply parsing', () => {
 });
 
 /** A simulated t2336 following docs/protocol.md, used to test the whole client flow. */
-function simulatedScooter(ltmk: Uint8Array, props: Record<string, Uint8Array>) {
+function simulatedScooter(ltmk: Uint8Array, props: Record<string, Uint8Array>, types: Record<string, number> = {}) {
   const listeners = new Map<string, (d: Uint8Array) => void>();
   const notify = (uuid: string, d: number[] | Uint8Array) => setTimeout(() => listeners.get(uuid)?.(Uint8Array.from(d)), 1);
   const sk = p256.utils.randomSecretKey();
@@ -143,7 +143,9 @@ function simulatedScooter(ltmk: Uint8Array, props: Record<string, Uint8Array>) {
       assert.equal(frame[4], 2, 'client must only send GET (op=2)');
       const [siid, piid] = [frame[6], frame[7]];
       const v = props[`${siid},${piid}`];
-      const body = v ? [siid, piid, 0, 0, 0, v.length & 0xff, v.length >> 8, ...v] : [siid, piid, 0, 1, 0x10];
+      const t = types[`${siid},${piid}`] ?? 1;
+      const tl = (t << 12) | v?.length!;
+      const body = v ? [siid, piid, 0, 0, 0, tl & 0xff, tl >> 8, ...v] : [siid, piid, 0, 1, 0x10];
       const out = Uint8Array.from([(6 + body.length) & 0xff, 0x20, frame[2], frame[3], 3, 1, ...body]);
       const enc = encryptSpec({ appKey: keys.devKey, appIv: keys.devIv, devKey: keys.devKey, devIv: keys.devIv }, devCounter++, out);
       pendingOut = [];
@@ -188,7 +190,7 @@ test('logs in and reads telemetry from a simulated t2336 (GET only)', { timeout:
     '2,6': f32(123456),
     '3,3': Uint8Array.of(0xfe),
     '4,5': new TextEncoder().encode('0.1.5'),
-  });
+  }, { '1,4': 9, '1,5': 9, '1,6': 9, '2,6': 9, '3,3': 2, '4,5': 10 });
   const p = new XiaomiT2336Protocol(async () => ({ cloudKeyHex, pin }), () => randomBytes(48));
   assert.ok(XiaomiT2336Protocol.matches(sim.transport));
   await p.connect(sim.transport);
@@ -223,3 +225,43 @@ test('wrong PIN is reported as rejected, and no key means no BLE traffic', { tim
 });
 
 void decryptSpec;
+
+test('official MIoT spec -> property map (names, formats, x100 floats, value lists)', async () => {
+  const { mapFromMiotSpec } = await import('../xiaomiSecure/spec');
+  const prop = (iid: number, name: string, format: string, access = ['read', 'notify'], extra = {}) => ({ iid, type: `urn:xiaomi-spec:property:${name}:0000000${iid}:xiaomi-x:1`, format, access, ...extra });
+  const map = mapFromMiotSpec({
+    services: [
+      { iid: 1, properties: [prop(1, 'riding-mode', 'uint8', ['read'], { 'value-list': [{ value: 0, description: 'Walk' }, { value: 2, description: 'Sport' }] }), prop(2, 'battery-level', 'uint8'), prop(4, 'voltage', 'float')] },
+      { iid: 2, properties: [prop(3, 'speed', 'float'), prop(8, 'riding-time', 'float'), prop(2, 'is-locked', 'bool', ['read', 'write'])] },
+      { iid: 4, properties: [prop(6, 'restore-settings', 'bool', ['write'])] },
+    ],
+  });
+  assert.deepEqual(map.voltage, { siid: 1, piid: 4, kind: 'f', scale: 0.01, values: undefined });
+  assert.deepEqual(map.speed, { siid: 2, piid: 3, kind: 'f', scale: 0.01, values: undefined });
+  assert.equal(map.ridingTime?.scale, 1);
+  assert.deepEqual(map.ridingMode?.values, { 0: 'Walk', 2: 'Sport' });
+  assert.equal(Object.keys(map).length, 5, 'only known, readable names are used');
+});
+
+test('a non-t2336 model reads live speed from its property map and shows mode names', { timeout: 20000 }, async () => {
+  const ltmk = randomBytes(32);
+  const sim = simulatedScooter(ltmk, { '1,2': Uint8Array.of(55), '2,3': f32(1834), '1,1': Uint8Array.of(2) }, { '2,3': 9 });
+  const map = {
+    batteryLevel: { siid: 1, piid: 2, kind: 'u8' as const, scale: 1 },
+    speed: { siid: 2, piid: 3, kind: 'f' as const, scale: 0.01 },
+    ridingMode: { siid: 1, piid: 1, kind: 'u8' as const, scale: 1, values: { 2: 'Sport' } },
+  };
+  // encrypt_type 0: the cloud key is the LTMK itself (5 Pro docs/BLE.md §4)
+  const p = new XiaomiT2336Protocol(async () => ({ cloudKeyHex: Buffer.from(ltmk).toString('hex'), pin: '', model: 'xiaomi.scooter.5pro', encryptType: 0, map }), () => randomBytes(48), 0x50d3);
+  await p.connect(sim.transport);
+  assert.equal(p.status, 'ok', p.statusMessage);
+  assert.ok(!p.verified);
+  assert.ok(p.capabilities.telemetry.includes('speedKmh'));
+  const snap = await p.poll();
+  assert.equal(snap.speedKmh?.value.toFixed(2), '18.34');
+  assert.equal(snap.speedKmh?.source, 'scooter');
+  assert.equal(snap.batteryPercent?.value, 55);
+  assert.equal(snap.rideMode?.value, 'Sport');
+  assert.equal(snap.batteryVoltage, null, 'not in this model\'s map: stays unavailable');
+  await p.disconnect();
+});

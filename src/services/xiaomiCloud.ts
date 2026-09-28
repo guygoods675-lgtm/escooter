@@ -146,12 +146,28 @@ export class XiaomiCloudLogin {
     return out;
   }
 
-  /** Step 4b: the PIN-protected Bluetooth key (64 hex chars) for one scooter. */
-  async bluetoothKey(s: CloudScooter): Promise<string> {
+  /** Step 4b: the scooter's Bluetooth key (64 hex chars) and whether it is PIN-protected (encrypt_type 1). */
+  async bluetoothKey(s: CloudScooter): Promise<{ key: string; encryptType: 0 | 1 }> {
     const r = await this.call(s.server, '/share/askbluetoothkey', `{"type":"own","did":"${s.did}","keyid":0}`);
     const key = r?.result?.key;
     if (r?.code !== 0 || typeof key !== 'string') throw new Error(`Xiaomi did not return a key (code ${r?.code ?? '?'})`);
-    if (Number(r.result.encrypt_type ?? 0) !== 1) throw new Error('This scooter returned a different key type than the 4 Pro 2nd Gen. It is not supported yet.');
-    return key;
+    const enc = Number(r.result.encrypt_type ?? 0);
+    if (enc !== 0 && enc !== 1) throw new Error(`Unknown key type ${enc}`);
+    return { key, encryptType: enc as 0 | 1 };
   }
+}
+
+/**
+ * Xiaomi's official, public MIoT spec for a device model (miot-spec.org): the list of
+ * services and properties (siid/piid, names, formats, value lists) the device exposes.
+ */
+export async function fetchOfficialSpec(model: string): Promise<unknown> {
+  const res = await fetch('https://miot-spec.org/miot-spec-v2/instances?status=all');
+  if (!res.ok) throw new Error(`Xiaomi spec list not reachable (HTTP ${res.status})`);
+  const all = (await res.json()) as { instances?: { model: string; version: number; type: string; status?: string }[] };
+  const mine = (all.instances ?? []).filter((i) => i.model === model).sort((a, b) => (b.status === 'released' ? 1 : 0) - (a.status === 'released' ? 1 : 0) || b.version - a.version);
+  if (!mine.length) throw new Error(`Xiaomi publishes no property list for ${model}`);
+  const r = await fetch(`https://miot-spec.org/miot-spec-v2/instance?type=${encodeURIComponent(mine[0].type)}`);
+  if (!r.ok) throw new Error(`Xiaomi spec for ${model} not reachable (HTTP ${r.status})`);
+  return r.json();
 }

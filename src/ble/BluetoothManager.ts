@@ -10,6 +10,8 @@ export interface ScannedDevice {
   rssi: number | null;
   serviceUUIDs: string[];
   manufacturerData: string | null; // hex
+  /** Xiaomi MiBeacon product id from FE95 service data (bytes 2-3 LE), if advertised */
+  miBeaconPid?: number | null;
   lastSeen: number;
 }
 
@@ -88,6 +90,10 @@ export function startScan(onDevice: (d: ScannedDevice) => void, onError: (e: Err
       rssi: device.rssi ?? null,
       serviceUUIDs: (device.serviceUUIDs ?? []).map((u) => u.toLowerCase()),
       manufacturerData,
+      miBeaconPid: (() => {
+        const fe95 = advertisedServiceData.get(device.id)?.['0000fe95-0000-1000-8000-00805f9b34fb'];
+        return fe95 && fe95.length >= 4 ? fe95[2] | (fe95[3] << 8) : null;
+      })(),
       lastSeen: Date.now(),
     });
   });

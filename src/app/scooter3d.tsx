@@ -1,8 +1,7 @@
 import { router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Text, View, useWindowDimensions } from 'react-native';
+import React, { useRef } from 'react';
+import { Text, View, useWindowDimensions } from 'react-native';
 import { useLive } from '../store/live';
-import { useSettings } from '../store/settings';
 import { DataTag } from '../ui/components/DataTag';
 import { Divider, GlassCard, NeonButton, Note, SectionHeader } from '../ui/components/Glass';
 import { Scooter3D, Scooter3DHandle, useScooterShape } from '../ui/components/Scooter3D';
@@ -23,10 +22,8 @@ function LegendRow({ part, driven, detail, source }: { part: string; driven: boo
 }
 
 export default function Scooter3DScreen() {
-  const reduce = useSettings((s) => s.reduceMotion || s.oledMode);
   const { height } = useWindowDimensions();
   const viewer = useRef<Scooter3DHandle>(null);
-  const a = useRef(new Animated.Value(reduce ? 1 : 0)).current;
   const { title } = useScooterTitle();
   const { wheelInches, wheelFromDatabase } = useScooterShape();
 
@@ -37,21 +34,15 @@ export default function Scooter3DScreen() {
   const hasTail = useLive((s) => s.conn === 'connected' && s.snapshot?.tailLight != null);
   const hasBatt = useLive((s) => s.conn === 'connected' && s.snapshot?.batteryPercent != null);
 
-  useEffect(() => {
-    if (reduce) return;
-    Animated.timing(a, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [a, reduce]);
-
-  const close = () => {
-    if (reduce) return router.back();
-    Animated.timing(a, { toValue: 0, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => router.back());
-  };
+  // No entrance fade: the screen must never depend on an animation finishing. The old
+  // fade-in could stay stuck at opacity 0 (Screen remounts its content), so nothing showed.
+  const close = () => router.back();
 
   const wheelText = wheelFromDatabase ? `${wheelInches}" wheel from the model database` : `No wheel size in the model database; a ${wheelInches}" wheel is assumed, so the spin rate is only visual`;
 
   return (
     <Screen contentStyle={{ paddingTop: 110 }}>
-      <Animated.View style={{ opacity: a, transform: [{ scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }}>
+      <View>
         <GlassCard padded={false} style={{ paddingVertical: S.md, paddingHorizontal: S.sm }}>
           <Scooter3D ref={viewer} height={Math.max(300, Math.min(520, height * 0.5))} interactive live showReset={false} />
         </GlassCard>
@@ -90,7 +81,7 @@ export default function Scooter3DScreen() {
           <LegendRow part="Shape" driven={false} detail={`Generic scooter. Proportions vary slightly by model family only; this is not an exact model of your ${title}.`} />
         </GlassCard>
         <Note>Animations here are a visualisation. Read exact values on the dashboard and live data screens.</Note>
-      </Animated.View>
+      </View>
     </Screen>
   );
 }
