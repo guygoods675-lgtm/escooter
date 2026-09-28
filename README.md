@@ -65,12 +65,13 @@ npm test            # protocol decoders tested against published packet captures
 | Xiaomi Electric Scooter 4 Pro (2nd Gen), `xiaomi.scooter.t2336` | `xiaomi-t2336` (encrypted securitychip login + MIoT SPEC), read-only | Battery %, voltage, current, power, range, trip distance/time, average speed, odometer, battery and controller temperature, fault code, battery health (SOH), charge cycles, remaining mAh, charging state, firmware and serials. Needs the scooter key from the owner's Xiaomi account plus the scooter PIN (Settings > Xiaomi scooter key). The scooter has no live-speed value; the dashboard shows phone GPS speed during a ride, labelled as such |
 | Xiaomi 1S, Essential, Pro 2, 3 | `xiaomi-m365` if the scooter answers the 55AA register read (older BLE firmware) | As M365 |
 | Xiaomi 4, 4 Pro (1st Gen), 4 Lite, 4 Ultra, 5 / 5 Pro / 5 Max, 6, 6 Ultra | `xiaomi-t2336`, experimental | Same securitychip login (confirmed identical for the 5 Pro in github.com/KuziaMother/SCOOTER_5_PRO docs/BLE.md). Values come from Xiaomi's official MIoT property list for the model (miot-spec.org), loaded once during key setup; only properties with a known name are read, including live speed where the model has one. Not yet confirmed on a real scooter |
-| NAVEE (e.g. ST5 Max) | recognised, `generic-ble` | Not supported: NAVEE's login uses secret keys taken from the NAVEE app, which Scooter Hub will not use |
-| Ninebot MAX G30, Segway ZT3 Pro, anything else | `generic-ble` | Standard Bluetooth Battery / Device Information services if present, plus the developer inspector |
+| NAVEE (ST3, ST3 Pro, ST5 Max) | recognised, `generic-ble` | Not supported: NAVEE's login uses secret keys taken from the NAVEE app, which Scooter Hub will not use |
+| Segway ZT3 Pro | recognised, `generic-ble` | Not supported: its NinebotCrypto login uses keys taken from the Segway app/firmware, which Scooter Hub will not use |
+| Ninebot MAX G30, anything else | `generic-ble` | Standard Bluetooth Battery / Device Information services if present, plus the developer inspector |
 
 **Encrypted firmware:** newer Xiaomi/Ninebot BLE firmware encrypts this link. Scooter Hub never bypasses encryption. It reads encrypted Xiaomi scooters only by logging in with the owner's own key and PIN exactly as the Xiaomi Home app does (a login with the existing key, not a new pairing, so the Mi Home binding is untouched). After login it only sends property GET requests: no lock, unlock or settings writes. Other encrypted scooters answer nothing, and the app says so and falls back to the generic profile.
 
-No public protocol documentation was found for the Segway ZT3 Pro, so it is listed in the database with generic support only. Use Developer Mode to inspect it; add an adapter once a documented protocol exists.
+The Segway ZT3 Pro is recognised in the scan list by its "NC" manufacturer data (github.com/pepperonas/segway-zt3-pro), but its data is encrypted with NinebotCrypto keys taken from the Segway app, so it stays on generic support. Use Developer Mode to inspect it.
 
 ## Protocol sources
 

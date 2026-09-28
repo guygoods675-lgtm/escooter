@@ -11,6 +11,8 @@ import { XIAOMI_SCOOTER_PIDS, VERIFIED_MODELS } from '../protocols/xiaomiSecure/
  *   "dreame scooter" name    docs/protocol.md above (4 Pro 2nd Gen)
  *   NAVEE name prefix / GATT service 0000d0ff-3c17-d293-8e48-14fe2e4da212
  *                            github.com/foddy201121/Tbe-Navee, github.com/jsluquelucena-rgb/navee-st3-pro docs/PROTOCOL.md
+ *   Manufacturer data "NC" (4E 43) on a NUS scooter = Segway-Ninebot with NinebotCrypto
+ *                            github.com/pepperonas/segway-zt3-pro (ZT3 Pro), github.com/scooterhacking/NinebotCrypto
  */
 export const XIAOMI_FE95 = '0000fe95-0000-1000-8000-00805f9b34fb';
 export const NAVEE_SERVICE = '0000d0ff-3c17-d293-8e48-14fe2e4da212';
@@ -23,7 +25,7 @@ export interface AdvertIdentity {
   support: AdvertSupport;
 }
 
-export function identifyAdvert(d: { name: string | null; serviceUUIDs: string[]; miBeaconPid?: number | null }): AdvertIdentity | null {
+export function identifyAdvert(d: { name: string | null; serviceUUIDs: string[]; miBeaconPid?: number | null; manufacturerData?: string | null }): AdvertIdentity | null {
   const name = d.name ?? '';
   if (d.miBeaconPid != null && XIAOMI_SCOOTER_PIDS[d.miBeaconPid]) {
     const x = XIAOMI_SCOOTER_PIDS[d.miBeaconPid];
@@ -33,6 +35,10 @@ export function identifyAdvert(d: { name: string | null; serviceUUIDs: string[];
   if (/^dreame scooter$/i.test(name)) return { brand: 'Xiaomi', model: 'Electric Scooter (encrypted Bluetooth)', support: 'needs-key' };
   if (/^NAVEE/i.test(name) || d.serviceUUIDs.includes(NAVEE_SERVICE)) return { brand: 'NAVEE', model: name.replace(/^NAVEE[\s_-]*/i, '') || 'Scooter', support: 'not-supported' };
   if (d.miBeaconPid != null && /scooter/i.test(name)) return { brand: 'Xiaomi', model: `Scooter (product id 0x${d.miBeaconPid.toString(16).toUpperCase().padStart(4, '0')})`, support: 'experimental' };
+  if ((d.manufacturerData ?? '').toLowerCase().startsWith('4e43')) {
+    const model = /zt3/i.test(name) ? 'ZT3 Pro' : name || 'Scooter';
+    return { brand: 'Segway-Ninebot', model: `${model} (encrypted Bluetooth)`, support: 'not-supported' };
+  }
   if (d.serviceUUIDs.includes(UUID.NUS_SERVICE)) return { brand: 'Xiaomi / Ninebot', model: 'UART scooter', support: 'supported' };
   return null;
 }
