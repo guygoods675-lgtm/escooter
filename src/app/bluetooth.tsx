@@ -160,6 +160,7 @@ function ConnectedCard() {
   const deviceName = useLive((s) => s.deviceName);
   const deviceId = useLive((s) => s.deviceId);
   const note = useLive((s) => s.detectionNote);
+  const setupAction = useLive((s) => s.setupAction);
   const reconnect = useSettings((s) => s.reconnect);
   const { title } = useScooterTitle();
   const now = useNow();
@@ -175,6 +176,7 @@ function ConnectedCard() {
       <KeyValue label="Connected for" value={connectedAt ? fmtDuration((now - connectedAt) / 1000) : NA} />
       <KeyValue label="Auto-reconnect" value={reconnect === 'auto' ? 'On' : 'Off'} />
       {!!note && <Note>{note}</Note>}
+      {conn === 'connected' && setupAction === 'xiaomi-key' && <NeonButton title="Add scooter key" small icon="key-outline" onPress={() => router.push('/xiaomi-key')} style={{ marginTop: S.md }} />}
       {conn === 'connected' && <NeonButton title="Choose model manually" small variant="ghost" icon="list" onPress={() => router.push('/identify')} style={{ marginTop: S.md }} />}
     </GlassCard>
   );

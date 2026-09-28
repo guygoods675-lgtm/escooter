@@ -102,6 +102,8 @@ export default function SettingsScreen() {
         <Divider />
         <ListRow icon="grid-outline" title="Dashboard layout" subtitle="Compact, large speed, battery, diagnostic, ride, custom" onPress={() => router.push('/dashboard-layout')} />
         <Divider />
+        <ListRow icon="key-outline" title="Xiaomi scooter key" subtitle="Needed for the Xiaomi 4 Pro 2nd Gen (encrypted Bluetooth)" onPress={() => router.push('/xiaomi-key')} />
+        <Divider />
         <Toggle k="dynamicAccent" title="Dynamic accent" sub="Accent follows charging, warning and critical states the scooter reports" />
         <Toggle k="reduceMotion" title="Reduce motion" sub="Turn off number and card animations" />
         <Toggle k="oledMode" title="OLED / low-power mode" sub="Black background, no photo or effects, bigger numbers, slower graph refresh" />

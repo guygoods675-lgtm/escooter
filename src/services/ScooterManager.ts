@@ -13,6 +13,8 @@ import { useActiveRide, startRide } from './RideTracker';
 import { updateWidgets } from '../widgets/updateWidgets';
 import { clearHistory, recordSnapshot } from './telemetryHistory';
 import { feedback } from './Feedback';
+import { getLastFix } from './GPSManager';
+import { reading } from '../protocols/types';
 
 /**
  * ScooterManager sits between the UI and the BLE/protocol layers:
@@ -70,7 +72,7 @@ export async function connectScooter(deviceId: string, advertisedName: string | 
     const preferred: ProtocolId | null = profile.manualModel ? modelById(profile.modelId)?.protocol ?? null : profile.protocolId;
     live.patch({ conn: 'identifying', services: session.services, deviceName: name, scooterId: profile.id });
 
-    const det = await detectProtocol(session, preferred, name);
+    const det = await detectProtocol(session, preferred, name, profile.protocolId as ProtocolId | null);
     protocol = det.protocol;
     const identity = { ...(await protocol.identify()), bleName: name, bleId: deviceId };
     // If the scooter didn't report a model, fall back to the user's manual choice.
@@ -90,6 +92,7 @@ export async function connectScooter(deviceId: string, advertisedName: string | 
       protocolId: protocol.id,
       protocolName: protocol.name,
       detectionNote: det.note + (model ? ` Model set manually: ${model.manufacturer} ${model.model}.` : ''),
+      setupAction: det.action ?? null,
       capabilities: protocol.capabilities,
       identity,
       snapshot: null,
@@ -115,13 +118,20 @@ function startPolling() {
   const loop = async () => {
     if (!protocol || !session) return;
     try {
-      const snap = await protocol.poll();
-      recordSnapshot(snap);
+      const scooterSnap = await protocol.poll();
+      recordSnapshot(scooterSnap);
       const live = useLive.getState();
-      const speed = snap.speedKmh?.value ?? null;
+      const speed = scooterSnap.speedKmh?.value ?? null;
       const max = speed != null ? Math.max(live.sessionMaxSpeed ?? 0, speed) : live.sessionMaxSpeed;
+      // Scooters without a live speed value (Xiaomi 4 Pro 2nd Gen) show the phone's GPS speed
+      // while GPS runs (during a ride), labelled "Phone GPS". Never stored as scooter data.
+      let snap = scooterSnap;
+      const fix = getLastFix();
+      if (!scooterSnap.speedKmh && !protocol.capabilities.telemetry.includes('speedKmh') && fix?.speedKmh != null && Date.now() - fix.t < 3000) {
+        snap = { ...scooterSnap, speedKmh: reading(fix.speedKmh, 'phone') };
+      }
       live.patch({ snapshot: snap, sessionMaxSpeed: max });
-      trackProfile(snap.speedKmh?.value ?? null, snap.odometerKm?.value ?? null);
+      trackProfile(speed, snap.odometerKm?.value ?? null);
       handleErrors();
       handleAlerts();
       handleAutoRide(speed);
@@ -278,6 +288,14 @@ export async function sendScooterCommand(id: string, value: number) {
   if (!protocol) throw new Error('Not connected');
   await protocol.sendCommand(id, value);
   feedback('success');
+}
+
+/** Reconnects to the current scooter (e.g. after saving a Xiaomi key). */
+export async function reconnectCurrent() {
+  const { deviceId, deviceName } = useLive.getState();
+  if (!deviceId) return;
+  await disconnectScooter();
+  await connectScooter(deviceId, deviceName);
 }
 
 export const getSession = () => session;

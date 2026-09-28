@@ -8,6 +8,7 @@ import { useGarage } from '../../store/garage';
 import { useLive } from '../../store/live';
 import { useSettings } from '../../store/settings';
 import { ConnectionStepper } from '../../ui/components/ConnectionStepper';
+import { ProtocolNotice } from '../../ui/components/ProtocolNotice';
 import { Badge, GlassCard, ListRow, NeonButton, Note, SectionHeader } from '../../ui/components/Glass';
 import { triggerEgg } from '../../ui/components/EasterEggs';
 import { FadeIn, Pulse } from '../../ui/components/Motion';
@@ -139,6 +140,7 @@ function ConnectedDashboard() {
         }
       />
       <ConnectedBanner />
+      <ProtocolNotice />
       {cards.map((id, i) => (
         <FadeIn key={id} index={i}>
           <DashCard id={id} />

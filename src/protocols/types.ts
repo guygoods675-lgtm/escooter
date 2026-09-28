@@ -170,6 +170,8 @@ export interface BleTransport {
   write(service: string, characteristic: string, data: Uint8Array, withResponse: boolean): Promise<void>;
   subscribe(service: string, characteristic: string, onData: (data: Uint8Array) => void): () => void;
   log(kind: 'info' | 'tx' | 'rx' | 'error', message: string, bytes?: Uint8Array, decoded?: string): void;
+  /** Optional: advertised service data (from the scan) for a service UUID. */
+  advertisedServiceData?(uuid: string): Uint8Array | null;
 }
 
 /**

@@ -35,6 +35,9 @@ const getManager = () => {
 /** Latest advertised manufacturer data (hex) per device id, remembered from scans. */
 const advertisedManufacturerData = new Map<string, string>();
 export const getAdvertisedManufacturerData = (deviceId: string): string | null => advertisedManufacturerData.get(deviceId) ?? null;
+/** Latest advertised service data per device id and service UUID (lowercase), remembered from scans. */
+const advertisedServiceData = new Map<string, Record<string, Uint8Array>>();
+export const getAdvertisedServiceData = (deviceId: string, uuid: string): Uint8Array | null => advertisedServiceData.get(deviceId)?.[uuid.toLowerCase()] ?? null;
 
 export type BleAdapterState = `${State}` | 'Unknown';
 
@@ -74,6 +77,11 @@ export function startScan(onDevice: (d: ScannedDevice) => void, onError: (e: Err
     if (!device) return;
     const manufacturerData = device.manufacturerData ? Array.from(base64ToBytes(device.manufacturerData)).map((b) => b.toString(16).padStart(2, '0')).join('') : null;
     if (manufacturerData) advertisedManufacturerData.set(device.id, manufacturerData);
+    if (device.serviceData) {
+      const sd: Record<string, Uint8Array> = {};
+      for (const [u, v] of Object.entries(device.serviceData)) if (v) sd[u.toLowerCase()] = base64ToBytes(v);
+      advertisedServiceData.set(device.id, sd);
+    }
     onDevice({
       id: device.id,
       name: device.name ?? device.localName ?? null,
@@ -141,6 +149,12 @@ export class BleSession implements BleTransport {
     const md = this.device.manufacturerData;
     if (md) return Array.from(base64ToBytes(md)).map((b) => b.toString(16).padStart(2, '0')).join('');
     return getAdvertisedManufacturerData(this.deviceId);
+  }
+
+  /** Service data advertised for `uuid` in the last scan (e.g. Xiaomi MiBeacon on FE95). */
+  advertisedServiceData(uuid: string): Uint8Array | null {
+    const sd = this.device.serviceData?.[uuid] ?? this.device.serviceData?.[uuid.toLowerCase()];
+    return sd ? base64ToBytes(sd) : getAdvertisedServiceData(this.deviceId, uuid);
   }
 
   /** Number of active notification subscriptions on a characteristic (any caller). */

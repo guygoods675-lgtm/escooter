@@ -24,6 +24,7 @@ interface LiveState {
   protocolId: string | null;
   protocolName: string | null;
   detectionNote: string | null;
+  setupAction: 'xiaomi-key' | null;
   capabilities: ProtocolCapabilities | null;
   identity: ScooterIdentity | null;
   snapshot: TelemetrySnapshot | null;
@@ -51,6 +52,7 @@ export const useLive = create<LiveState>((set) => ({
   protocolId: null,
   protocolName: null,
   detectionNote: null,
+  setupAction: null,
   capabilities: null,
   identity: null,
   snapshot: null,

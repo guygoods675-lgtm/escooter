@@ -99,6 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="bluetooth" options={{ title: 'Bluetooth' }} />
           <Stack.Screen name="identify" options={{ title: 'Select model', presentation: 'modal' }} />
+          <Stack.Screen name="xiaomi-key" options={{ title: 'Scooter key' }} />
           <Stack.Screen name="battery" options={{ title: 'Battery' }} />
           <Stack.Screen name="motor" options={{ title: 'Motor & controller' }} />
           <Stack.Screen name="controls" options={{ title: 'Lights & modes' }} />

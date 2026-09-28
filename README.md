@@ -62,9 +62,12 @@ npm test            # protocol decoders tested against published packet captures
 | --- | --- | --- |
 | Xiaomi M365, M365 Pro (older, unencrypted BLE firmware) | `xiaomi-m365` (55AA) | Speed, battery %, voltage, current, power (calculated), battery temps, controller temp, odometer, trip distance/time, range, error/warning codes, cell voltages, BMS health/cycles/capacity, tail light / cruise / KERS state and controls |
 | Ninebot ES1/ES2/ES4 (older, unencrypted BLE firmware) | `ninebot-es` (5AA5), read-only | Same telemetry plus riding mode and reported power |
+| Xiaomi Electric Scooter 4 Pro (2nd Gen), `xiaomi.scooter.t2336` | `xiaomi-t2336` (encrypted securitychip login + MIoT SPEC), read-only | Battery %, voltage, current, power, range, trip distance/time, average speed, odometer, battery and controller temperature, fault code, battery health (SOH), charge cycles, remaining mAh, charging state, firmware and serials. Needs the scooter key from the owner's Xiaomi account plus the scooter PIN (Settings > Xiaomi scooter key). The scooter has no live-speed value; the dashboard shows phone GPS speed during a ride, labelled as such |
+| Xiaomi 1S, Essential, Pro 2, 3 | `xiaomi-m365` if the scooter answers the 55AA register read (older BLE firmware) | As M365 |
+| Xiaomi 4, 4 Pro (1st Gen), 4 Lite, 4 Ultra, 5 series | recognised, `generic-ble` | Encrypted; no verified public property map yet, so the app says so instead of showing blank values |
 | Ninebot MAX G30, Segway ZT3 Pro, anything else | `generic-ble` | Standard Bluetooth Battery / Device Information services if present, plus the developer inspector |
 
-**Encrypted firmware:** newer Xiaomi/Ninebot BLE firmware encrypts this link. Scooter Hub does not implement or bypass that encryption. Such scooters answer nothing, and the app says so and falls back to the generic profile.
+**Encrypted firmware:** newer Xiaomi/Ninebot BLE firmware encrypts this link. Scooter Hub never bypasses encryption. The only encrypted model it reads is the Xiaomi 4 Pro 2nd Gen, and only by logging in with the owner's own key and PIN exactly as the Xiaomi Home app does (a login with the existing key, not a new pairing, so the Mi Home binding is untouched). After login it only sends property GET requests: no lock, unlock or settings writes. Other encrypted scooters answer nothing, and the app says so and falls back to the generic profile.
 
 No public protocol documentation was found for the Segway ZT3 Pro, so it is listed in the database with generic support only. Use Developer Mode to inspect it; add an adapter once a documented protocol exists.
 
@@ -78,6 +81,7 @@ Every UUID, frame format, register and scaling in `src/protocols` cites its sour
 - Reference implementation (Ninebot checksum includes the length byte, host address 0x3E, 20-byte BLE writes): https://github.com/etransport/py9b
 - Captured Mi Home traffic with scaling examples (used as test vectors): https://github.com/CamiAlfa/M365-BLE-PROTOCOL/blob/master/protocolo
 - Encryption on newer firmware: https://www.irmo.de/2023/11/08/e-scooter-bluetooth-hacking/
+- Xiaomi 4 Pro 2nd Gen (t2336) login, SPEC channel and property map (MIT): https://github.com/mehesbalazs/xiaomi-scooter-4-pro-2 (`docs/protocol.md`, `scooter.py`). Crypto uses the audited @noble libraries; AES-CCM is tested against OpenSSL and the full login/read flow against a simulated scooter in `src/protocols/__tests__/xiaomiSecure.test.ts`
 
 ## Safety rules built into the code
 
