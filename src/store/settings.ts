@@ -81,7 +81,7 @@ const defaults: Settings = {
   notifyAbnormal: true,
   systemNotifications: true,
   reduceMotion: false,
-  bgTheme: 'sunset',
+  bgTheme: 'space',
   customBgUri: null,
   bgDim: 0.82,
   twinkle: true,
@@ -108,6 +108,16 @@ export const useSettings = create<SettingsState>()(
       set: (key, value) => set({ [key]: value } as Partial<Settings>),
       reset: () => set(defaults),
     }),
-    { name: 'sh.settings', storage: jsonStorage },
+    {
+      name: 'sh.settings',
+      storage: jsonStorage,
+      version: 1,
+      // v1: Deep Space replaced the Sunset Ride photo as the standard look (john's request).
+      migrate: (state, version) => {
+        const s = state as Partial<Settings>;
+        if (version < 1 && s.bgTheme === 'sunset') s.bgTheme = 'space';
+        return s as SettingsState;
+      },
+    },
   ),
 );

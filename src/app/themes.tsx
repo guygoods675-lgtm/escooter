@@ -154,7 +154,7 @@ export default function ThemesScreen() {
 
       <Pressable
         onPress={() => {
-          set('bgTheme', 'sunset');
+          set('bgTheme', 'space');
           set('accent', 'purple');
           set('bgDim', 0.82);
           set('dynamicAccent', false);
@@ -162,7 +162,7 @@ export default function ThemesScreen() {
         style={styles.reset}
       >
         <Ionicons name="refresh" size={14} color={C.textDim} />
-        <Text style={styles.resetText}>Back to the original Scooter Hub look</Text>
+        <Text style={styles.resetText}>Back to the standard look (Deep Space)</Text>
       </Pressable>
     </Screen>
   );
