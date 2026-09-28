@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 import { parseCloudKey } from '../protocols/xiaomiSecure/crypto';
 import { reconnectCurrent } from '../services/ScooterManager';
+import { XiaomiCloudLogin } from '../services/xiaomiCloud';
 import { useLive } from '../store/live';
 import { clearXiaomiCredentials, hasXiaomiCredentials, saveXiaomiCredentials } from '../store/xiaomiKey';
 import { GlassCard, NeonButton, Note, SectionHeader } from '../ui/components/Glass';
@@ -19,6 +20,38 @@ export default function XiaomiKeyScreen() {
   const [saved, setSaved] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const deviceId = useLive((s) => s.deviceId);
+  const [cloudMsg, setCloudMsg] = useState<string | null>(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const cloud = useRef<XiaomiCloudLogin | null>(null);
+
+  useEffect(() => () => {
+    if (cloud.current) cloud.current.cancelled = true;
+  }, []);
+
+  const fromAccount = async () => {
+    const c = new XiaomiCloudLogin();
+    cloud.current = c;
+    setCloudBusy(true);
+    try {
+      setCloudMsg('Opening the Xiaomi login page…');
+      const url = await c.start();
+      await Linking.openURL(url);
+      setCloudMsg('Log in on the Xiaomi page, then come back here. Waiting…');
+      await c.waitForLogin();
+      const scooters = await c.findScooters(setCloudMsg);
+      const s = scooters.find((x) => x.model === 'xiaomi.scooter.t2336') ?? scooters[0];
+      if (!s) throw new Error('No scooter was found in your Xiaomi account.');
+      setCloudMsg(`Found "${s.name}" (${s.model}). Getting its key…`);
+      const k = await c.bluetoothKey(s);
+      setKey(k);
+      setCloudMsg(`Key received for "${s.name}". Now type the scooter PIN and press Save.`);
+    } catch (e) {
+      setCloudMsg(`${e instanceof Error ? e.message : String(e)}. You can still paste the key by hand below.`);
+    } finally {
+      setCloudBusy(false);
+      cloud.current = null;
+    }
+  };
 
   useEffect(() => {
     hasXiaomiCredentials().then(setSaved).catch(() => setSaved(false));
@@ -59,6 +92,14 @@ export default function XiaomiKeyScreen() {
         {saved !== null && <Text style={[styles.status, { color: saved ? C.green : C.amber }]}>{saved ? 'A scooter key is saved on this phone.' : 'No scooter key saved yet.'}</Text>}
       </GlassCard>
 
+      <SectionHeader title="Easiest: from your Xiaomi account" icon="cloud-download-outline" />
+      <GlassCard>
+        <Note>Log in on Xiaomi's own page. Scooter Hub never sees your password. It asks Xiaomi for your scooter's Bluetooth key once and fills it in below. Your login is not stored.</Note>
+        <NeonButton title="Get key from my Xiaomi account" icon="log-in-outline" onPress={fromAccount} loading={cloudBusy} style={{ marginTop: S.sm }} />
+        {cloudBusy && <NeonButton title="Cancel" small variant="ghost" onPress={() => { if (cloud.current) cloud.current.cancelled = true; }} style={{ marginTop: S.sm }} />}
+        {!!cloudMsg && <Text style={styles.cloud}>{cloudMsg}</Text>}
+      </GlassCard>
+
       <SectionHeader title="Scooter key" icon="key-outline" />
       <GlassCard>
         <TextInput
@@ -81,7 +122,7 @@ export default function XiaomiKeyScreen() {
       <SectionHeader title="How to get the key" icon="help-circle-outline" />
       <GlassCard>
         <Note>
-          The key is stored in your Xiaomi account (Xiaomi calls it the Bluetooth key). The free open-source tool "xiaomi-scooter-4-pro-2" downloads it once: on a computer, run tokens/get_ltmk.py, log in with your Xiaomi account, and copy the 64-character key it prints into the field above.
+          The button above does this for you. If it does not work, the free open-source tool "xiaomi-scooter-4-pro-2" does the same on a computer: run tokens/get_ltmk.py, log in with your Xiaomi account, and paste the 64-character key it prints into the field above.
         </Note>
         <NeonButton title="Open the step-by-step guide" small variant="ghost" icon="open-outline" onPress={() => Linking.openURL(KEY_GUIDE)} style={{ marginTop: S.sm }} />
         <Note>If the scooter suddenly rejects the login although the PIN is right, Xiaomi changed the key. Get it again and save it here.</Note>
@@ -107,4 +148,5 @@ const styles = StyleSheet.create({
   input: { color: C.text, borderWidth: 1, get borderColor() { return C.border; }, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, fontFamily: undefined },
   err: { color: C.red, marginTop: 6, fontSize: 12.5 },
   src: { color: C.textFaint, fontSize: 12, marginTop: S.sm },
+  cloud: { color: C.text, marginTop: S.sm, fontSize: 13.5 },
 });
