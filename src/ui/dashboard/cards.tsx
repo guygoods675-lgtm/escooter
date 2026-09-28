@@ -96,6 +96,7 @@ function HeaderCard() {
 function SpeedCard({ large }: { large?: boolean }) {
   const speed = useLive((x) => x.snapshot?.speedKmh?.value ?? null);
   const maxSpeed = useLive((x) => x.sessionMaxSpeed);
+  const fromPhone = useLive((x) => x.snapshot?.speedKmh?.source === 'phone');
   const u = useUnits();
   return (
     <View style={{ alignItems: 'center', marginVertical: large ? S.lg : S.sm }}>
@@ -107,7 +108,7 @@ function SpeedCard({ large }: { large?: boolean }) {
         unit={u.speedLabel}
         digits={1}
         stroke={large ? 20 : 16}
-        sub={maxSpeed != null ? `max ${u.speed(maxSpeed).toFixed(1)} ${u.speedLabel}` : undefined}
+        sub={fromPhone ? 'Phone GPS' : maxSpeed != null ? `max ${u.speed(maxSpeed).toFixed(1)} ${u.speedLabel}` : undefined}
       />
     </View>
   );

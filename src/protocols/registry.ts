@@ -7,7 +7,7 @@ import type { BleTransport, ScooterProtocol } from './types';
 import { M365Protocol } from './xiaomi/M365Protocol';
 import { getRandomBytes } from 'expo-crypto';
 import { loadXiaomiCredentials } from '../store/xiaomiKey';
-import { XIAOMI_SCOOTER_PIDS, XIAOMI_SEC, XiaomiT2336Protocol } from './xiaomiSecure/XiaomiT2336Protocol';
+import { XIAOMI_SCOOTER_PIDS, XIAOMI_SEC, XiaomiT2336Protocol, pidFromXiaomiName } from './xiaomiSecure/XiaomiT2336Protocol';
 
 const newT2336 = (productId: number | null = null) => new XiaomiT2336Protocol(loadXiaomiCredentials, () => getRandomBytes(48), productId);
 
@@ -50,9 +50,15 @@ export interface DetectionResult {
  * Xiaomi models use the property list from Xiaomi's official MIoT spec, loaded once
  * during key setup, and are marked experimental.
  */
-async function detectXiaomiSecure(transport: BleTransport, preferred?: ProtocolId | null, previous?: ProtocolId | null): Promise<DetectionResult | null> {
-  if (!XiaomiT2336Protocol.matches(transport)) return null;
-  const pid = miBeaconProductId(transport);
+async function detectXiaomiSecure(transport: BleTransport, preferred?: ProtocolId | null, previous?: ProtocolId | null, advertisedName?: string | null): Promise<DetectionResult | null> {
+  if (!XiaomiT2336Protocol.matches(transport)) {
+    if (transport.hasService(XIAOMI_SEC.SERVICE) || /^xiaomi\.scooter\./i.test(advertisedName ?? '')) {
+      const missing = [XIAOMI_SEC.CONTROL, XIAOMI_SEC.LOGIN, XIAOMI_SEC.SPEC_WRITE, XIAOMI_SEC.SPEC_NOTIFY].filter((c) => !transport.hasCharacteristic(XIAOMI_SEC.SERVICE, c));
+      transport.log('error', `Xiaomi scooter seen but securitychip characteristics missing: ${missing.map((c) => c.slice(4, 8)).join(', ')}`);
+    }
+    return null;
+  }
+  const pid = miBeaconProductId(transport) ?? pidFromXiaomiName(advertisedName);
   const pidText = pid !== null ? `0x${pid.toString(16).toUpperCase().padStart(4, '0')}` : 'not seen';
   transport.log('info', `Xiaomi securitychip service found, product id ${pidText}`);
   const p = newT2336(pid);
@@ -72,7 +78,7 @@ async function detectXiaomiSecure(transport: BleTransport, preferred?: ProtocolI
  * `preferred` (from a manual model selection) is tried first.
  */
 export async function detectProtocol(transport: BleTransport, preferred?: ProtocolId | null, advertisedName?: string | null, previous?: ProtocolId | null): Promise<DetectionResult> {
-  if (preferred === 'generic-ble') {
+  if (preferred === 'generic-ble' && !XiaomiT2336Protocol.matches(transport)) {
     const g = new GenericBleProtocol();
     await g.connect(transport);
     return { protocol: g, note: 'Generic profile selected manually.' };
@@ -80,7 +86,7 @@ export async function detectProtocol(transport: BleTransport, preferred?: Protoc
   const hasNus = transport.hasCharacteristic(UUID.NUS_SERVICE, UUID.NUS_TX_NOTIFY) && transport.hasCharacteristic(UUID.NUS_SERVICE, UUID.NUS_RX_WRITE);
   // The 4 Pro 2nd Gen has no Nordic UART service; scooters with both try the open protocols first.
   if (!hasNus || preferred === 'xiaomi-t2336') {
-    const x = await detectXiaomiSecure(transport, preferred, previous);
+    const x = await detectXiaomiSecure(transport, preferred, previous, advertisedName);
     if (x) return x;
   }
   if (hasNus) {
@@ -95,7 +101,7 @@ export async function detectProtocol(transport: BleTransport, preferred?: Protoc
       if (await p.probe()) return { protocol: p, note: `${p.name} answered a register read.` };
       await p.disconnect();
     }
-    const x = await detectXiaomiSecure(transport, preferred, previous);
+    const x = await detectXiaomiSecure(transport, preferred, previous, advertisedName);
     if (x) return x;
     const g = new GenericBleProtocol();
     await g.connect(transport);

@@ -41,6 +41,13 @@ export const XIAOMI_SCOOTER_PIDS: Record<number, { model: string; name: string }
   0x50d3: { model: 'xiaomi.scooter.5pro', name: 'Electric Scooter 5 Pro' },
 };
 
+/** Some Xiaomi scooters advertise their MIoT model id as the Bluetooth name (seen on john's 4 Pro 2nd Gen: "xiaomi.scooter.t2336"). */
+export function pidFromXiaomiName(name: string | null | undefined): number | null {
+  const n = (name ?? '').trim().toLowerCase();
+  const hit = Object.entries(XIAOMI_SCOOTER_PIDS).find(([, v]) => v.model === n);
+  return hit ? Number(hit[0]) : null;
+}
+
 /** Models whose property map and GET opcode were verified on a real scooter by the cited sources. */
 export const VERIFIED_MODELS = new Set(['xiaomi.scooter.t2336']);
 

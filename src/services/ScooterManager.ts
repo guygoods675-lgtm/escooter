@@ -2,6 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { BleSession, onAdapterState, requestBlePermissions } from '../ble/BluetoothManager';
 import { ProtocolId, modelById } from '../data/scooterDatabase';
 import { detectProtocol } from '../protocols/registry';
+import { acquirePhoneGps } from './motion';
 import type { ScooterProtocol } from '../protocols/types';
 import { devLog } from '../store/devlog';
 import { useErrors } from '../store/errors';
@@ -54,6 +55,8 @@ export function initScooterManager() {
   };
 }
 
+let releaseConnGps: (() => void) | null = null;
+
 export async function connectScooter(deviceId: string, advertisedName: string | null) {
   const live = useLive.getState();
   if (live.conn === 'connecting' || live.conn === 'identifying') return;
@@ -69,7 +72,10 @@ export async function connectScooter(deviceId: string, advertisedName: string | 
     session = await BleSession.open(deviceId, timeout, onUnexpectedDisconnect);
     const name = session.name ?? advertisedName;
     const profile = useGarage.getState().upsertFromConnection(deviceId, name);
-    const preferred: ProtocolId | null = profile.manualModel ? modelById(profile.modelId)?.protocol ?? null : profile.protocolId;
+    // A saved auto-detected 'generic-ble' is never reused: it would skip detection forever
+    // (john's 4 Pro 2nd Gen stayed "Generic BLE" after updating to a version that supports it).
+    const saved = profile.protocolId === 'generic-ble' ? null : profile.protocolId;
+    const preferred: ProtocolId | null = profile.manualModel ? modelById(profile.modelId)?.protocol ?? null : saved;
     live.patch({ conn: 'identifying', services: session.services, deviceName: name, scooterId: profile.id });
 
     const det = await detectProtocol(session, preferred, name, profile.protocolId as ProtocolId | null);
@@ -101,7 +107,10 @@ export async function connectScooter(deviceId: string, advertisedName: string | 
       sessionMaxSpeed: null,
     });
     feedback('connect');
-    startPolling();
+    // No live speed from this scooter: keep phone GPS on while connected so the gauge can
+    // show the phone's speed, labelled "Phone GPS".
+    startPolling(); // stops any previous polling (and its GPS hold) first
+    if (!protocol.capabilities.telemetry.includes('speedKmh')) releaseConnGps = acquirePhoneGps();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     devLog('error', `Connect failed: ${msg}`);
@@ -124,7 +133,7 @@ function startPolling() {
       const speed = scooterSnap.speedKmh?.value ?? null;
       const max = speed != null ? Math.max(live.sessionMaxSpeed ?? 0, speed) : live.sessionMaxSpeed;
       // Scooters without a live speed value (Xiaomi 4 Pro 2nd Gen) show the phone's GPS speed
-      // while GPS runs (during a ride), labelled "Phone GPS". Never stored as scooter data.
+      // (GPS is held on while connected), labelled "Phone GPS". Never stored as scooter data.
       let snap = scooterSnap;
       const fix = getLastFix();
       if (!scooterSnap.speedKmh && !protocol.capabilities.telemetry.includes('speedKmh') && fix?.speedKmh != null && Date.now() - fix.t < 3000) {
@@ -156,6 +165,8 @@ function startPolling() {
 }
 
 function stopPolling() {
+  releaseConnGps?.();
+  releaseConnGps = null;
   if (pollTimer) clearTimeout(pollTimer);
   if (rssiTimer) clearInterval(rssiTimer);
   pollTimer = null;

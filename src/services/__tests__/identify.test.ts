@@ -12,5 +12,6 @@ test('scan list names scooters only from documented advertisement data', () => {
   assert.deepEqual(identifyAdvert({ name: 'NAVEE ST3', serviceUUIDs: [] }), { brand: 'NAVEE', model: 'ST3', support: 'not-supported' });
   assert.equal(identifyAdvert({ name: 'ZT3Pro', serviceUUIDs: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'], manufacturerData: '4e43aabb' })?.support, 'not-supported', 'encrypted Segway is not claimed as supported');
   assert.equal(identifyAdvert({ name: 'ZT3Pro', serviceUUIDs: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'], manufacturerData: '4e43aabb' })?.model, 'ZT3 Pro (encrypted Bluetooth)');
+  assert.deepEqual(identifyAdvert({ name: 'xiaomi.scooter.t2336', serviceUUIDs: [] }), { brand: 'Xiaomi', model: 'Electric Scooter 4 Pro (2nd Gen)', support: 'needs-key' }, 'name seen on a real 4 Pro 2nd Gen');
   assert.equal(identifyAdvert({ name: 'Headphones', serviceUUIDs: [] }), null);
 });
